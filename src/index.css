@@ -1,0 +1,22 @@
+li {
+  list-style-type: none;
+}
+
+ul {
+  padding: 0;
+}
+
+button {
+  border: none;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+button:focus {
+  outline: none;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+button:disabled:hover {
+  background-color: #e5e7eb;
+}
