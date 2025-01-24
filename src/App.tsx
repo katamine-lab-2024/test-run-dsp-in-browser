@@ -1,22 +1,24 @@
 import type React from "react";
 import { useState, useRef, useEffect } from "react";
-import clsx from "clsx";
 import "./App.css";
 import { browserBundle, revokeAllFileMapping } from "./lib/browser-bundle";
+import { compiler } from "./lib/compiler/main";
 import { getFileString } from "./util/getFileString";
 
-const defaultMain = `import { hello } from "./hello";
-
-export const greet = hello("World");
-console.log("main.ts greet =>", greet);
+const defaultMain = `pointInQuarterCircle({R : real}, {X : real, Y : real})
+  method
+    X : real = for(0.0, R, 1.0);
+    Y : real = for(0.0, R, 1.0);
+    D : real = sqrt(X^2 + Y^2);
+    test(D =< R);
+  end method;
+end module;
 `;
 
 const App: React.FC = () => {
   const [modules, setModules] = useState<{ [key: string]: string }>({});
-  const [script, setScript] = useState({
-    "main.ts": defaultMain,
-  });
-  const [tab, setTab] = useState<keyof typeof script>("main.ts");
+  const [input, setInput] = useState(defaultMain);
+  const [output, setOutput] = useState("");
   const [result, setResult] = useState();
   const fileMappingRef = useRef<Map<string, string>>();
 
@@ -31,19 +33,24 @@ const App: React.FC = () => {
     })();
   });
 
+  const handleCompile = async () => {
+    const o = compiler("input", input);
+    if (!o) {
+      setOutput("");
+      return;
+    }
+    setOutput(o);
+  };
+
   const handleRun = async () => {
     if (fileMappingRef.current) {
       revokeAllFileMapping(fileMappingRef.current);
     }
-    browserBundle(script["main.ts"], "main.ts", {
+    browserBundle(output, "main.ts", {
       files: {
         ...modules,
       },
       compilerOptions: {},
-      // importMap: {
-      //   "react": "https://cdn.skypack.dev/react",
-      //   "react-dom": "https://cdn.skypack.dev/react-dom",
-      // }
     })
       .then(async ({ code, fileMapping }) => {
         fileMappingRef.current = fileMapping;
@@ -58,7 +65,7 @@ const App: React.FC = () => {
         const userInput = Number(
           prompt("数値を入力してください", "10") || "10"
         );
-        const resultValue = mod.main(userInput);
+        const resultValue = mod.main({ _R: userInput });
         setResult(resultValue);
 
         // setResult(mod.result);
@@ -69,7 +76,7 @@ const App: React.FC = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setScript((script) => ({ ...script, [tab]: e.target.value }));
+    setInput(e.target.value);
   };
 
   return (
@@ -78,33 +85,33 @@ const App: React.FC = () => {
         <div className="leftPanel">
           <div className="tabWrapper">
             <ul>
-              {(["main.ts"] as const).map((item) => (
-                <li key={item}>
-                  <button
-                    type="button"
-                    onClick={() => setTab(item)}
-                    className={clsx([
-                      "tabButton",
-                      tab === item ? "active" : "",
-                    ])}
-                  >
-                    {item}
-                  </button>
-                </li>
-              ))}
+              <li>DSP</li>
+              <li>
+                <button
+                  type="button"
+                  onClick={handleCompile}
+                  className="tabButton"
+                >
+                  変換する
+                </button>
+              </li>
             </ul>
           </div>
           <textarea
-            key={tab}
             className="textArea"
             onChange={handleChange}
-            defaultValue={script[tab]}
+            defaultValue={input}
           />
         </div>
         <div className="previewContainer">
           <div className="previewWrapper">
             <p className="previewTitle">プレビュー結果</p>
-            <button type="button" className="tabButton" onClick={handleRun}>
+            <button
+              type="button"
+              className="tabButton"
+              onClick={handleRun}
+              disabled={!output}
+            >
               実行
             </button>
           </div>
