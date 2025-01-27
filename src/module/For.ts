@@ -7,19 +7,19 @@ export class For implements Predicate {
   /**
    * 出力変数
    */
-  private x: Variable;
+  private x: Variable<number>;
   /**
    * 開始値
    */
-  private from: Variable;
+  private from: Variable<number>;
   /**
    * 終了値
    */
-  private to: Variable;
+  private to: Variable<number>;
   /**
    * ステップ
    */
-  private by: Variable;
+  private by: Variable<number>;
   /**
    * 継続ゴール
    */
@@ -32,25 +32,25 @@ export class For implements Predicate {
    * @param cont 継続ゴール
    */
   public constructor(
-    x: Variable,
-    from: Variable | number,
-    to: Variable | number,
-    by: Variable | number,
+    x: Variable<number>,
+    from: Variable<number> | number,
+    to: Variable<number> | number,
+    by: Variable<number> | number,
     cont: Predicate
   ) {
     this.x = x;
     if (typeof from === "number") {
-      this.from = new Variable(from);
+      this.from = new Variable<number>(from);
     } else {
       this.from = from;
     }
     if (typeof to === "number") {
-      this.to = new Variable(to);
+      this.to = new Variable<number>(to);
     } else {
       this.to = to;
     }
     if (typeof by === "number") {
-      this.by = new Variable(by);
+      this.by = new Variable<number>(by);
     } else {
       this.by = by;
     }

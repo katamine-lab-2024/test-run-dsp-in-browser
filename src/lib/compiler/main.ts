@@ -13,9 +13,23 @@ const errorList: CompileError[] = [];
 /**
  * コンパイル
  * @param args
- * @returns {string} コンパイル結果
  */
-const compile = (filename: string, input: string): string => {
+const compile = (
+  filename: string,
+  input: string
+): {
+  output: string;
+  props: {
+    input: {
+      name: string;
+      type: string;
+    }[];
+    output: {
+      name: string;
+      type: string;
+    }[];
+  };
+} => {
   // ファイル名を格納
   setFilename(filename);
   // ファイル読み込み
@@ -35,9 +49,44 @@ const compile = (filename: string, input: string): string => {
   }
   // 変換
   const newAst = converter(ast.program);
+  // newAstから、クラスのfieldのvarをすべて取得
+  let props: {
+    input: {
+      name: string;
+      type: string;
+    }[];
+    output: {
+      name: string;
+      type: string;
+    }[];
+  } = {
+    input: [],
+    output: [],
+  };
+  const varList = newAst.body
+    .filter((cls) => cls.type !== "dummy")
+    .flatMap((c) => c.fieldList.filter((f) => f.type !== "dummy"))
+    .flatMap((p) => p.value);
+  props = {
+    input: varList
+      .filter((v) => v.isInput)
+      .map((v) => ({
+        name: v.name,
+        type:
+          v.valueType.type === "array"
+            ? `${v.valueType.member[0].type}[]`
+            : v.valueType.type,
+      })),
+    output: varList
+      .filter((v) => !v.isInput)
+      .map((v) => ({ name: v.name, type: v.valueType.type })),
+  };
   // コード生成
   const output = codeGen(newAst);
-  return output;
+  return {
+    output,
+    props,
+  };
 };
 
 /**
@@ -46,8 +95,7 @@ const compile = (filename: string, input: string): string => {
  */
 export const compiler = (filename: string, input: string) => {
   try {
-    const output = compile(filename, input);
-    return output;
+    return compile(filename, input);
   } catch (e) {
     reportError(errorList);
   }

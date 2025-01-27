@@ -4,15 +4,15 @@ import { createInnerClass, type IC } from "./util";
 import type { Variable } from "./Variable";
 import type { VM } from "./VM";
 
-export class Member implements Predicate {
+export class Member<T extends string | number | boolean> implements Predicate {
   /**
    * 要素の出力変数
    */
-  private x: Variable;
+  private x: Variable<T>;
   /**
    * リスト
    */
-  private l: List;
+  private l: List<T>;
   /**
    * 継続ゴール
    */
@@ -24,7 +24,7 @@ export class Member implements Predicate {
    * @param l リスト
    * @param cont 継続ゴール
    */
-  public constructor(x: Variable, l: List, cont: Predicate) {
+  public constructor(x: Variable<T>, l: List<T>, cont: Predicate) {
     this.x = x;
     this.l = l;
     this.cont = cont;

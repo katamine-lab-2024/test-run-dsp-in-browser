@@ -1,22 +1,19 @@
 import { Variable } from "./Variable";
 
-export class List {
+export class List<T extends string | number | boolean> {
   /**
    * `Variable`型のリスト
    */
-  private list: Array<Variable> = [];
+  private list: Array<Variable<T>> = [];
 
   /**
    * `List`クラスのコンストラクタ
    * @param val `string | number | boolean`型のリスト | `undefined`
    */
-  public constructor(val?: Array<Value>);
-  public constructor(val: Array<Value>);
-
-  public constructor(val?: Array<Value>) {
+  public constructor(val?: Array<T>) {
     if (val === undefined) return;
-    for (let i = 0; i < val.length; i++) {
-      this.list.push(new Variable(val[i]));
+    for (const item of val) {
+      this.list.push(new Variable<T>(item));
     }
   }
 
@@ -33,7 +30,7 @@ export class List {
    * @param index インデックス
    * @returns 指定したインデックスの要素
    */
-  public getByIndex(index: number): Variable {
+  public getByIndex(index: number): Variable<T> {
     return this.list[index];
   }
 

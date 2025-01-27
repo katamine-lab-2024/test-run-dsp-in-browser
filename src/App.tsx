@@ -18,8 +18,21 @@ end module;
 const App: React.FC = () => {
   const [modules, setModules] = useState<{ [key: string]: string }>({});
   const [input, setInput] = useState(defaultMain);
-  const [output, setOutput] = useState("");
-  const [result, setResult] = useState();
+  const [output, setOutput] = useState<{
+    output: string;
+    props: {
+      input: { name: string; type: string }[];
+      output: { name: string; type: string }[];
+    };
+  }>({
+    output: "",
+    props: {
+      input: [],
+      output: [],
+    },
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  const [result, setResult] = useState<any[]>();
   const fileMappingRef = useRef<Map<string, string>>();
 
   useEffect(() => {
@@ -36,7 +49,13 @@ const App: React.FC = () => {
   const handleCompile = async () => {
     const o = compiler("input", input);
     if (!o) {
-      setOutput("");
+      setOutput({
+        output: "",
+        props: {
+          input: [],
+          output: [],
+        },
+      });
       return;
     }
     setOutput(o);
@@ -46,7 +65,7 @@ const App: React.FC = () => {
     if (fileMappingRef.current) {
       revokeAllFileMapping(fileMappingRef.current);
     }
-    browserBundle(output, "main.ts", {
+    browserBundle(output.output, "main.ts", {
       files: {
         ...modules,
       },
@@ -60,15 +79,27 @@ const App: React.FC = () => {
         // dynamic import で読み込む
         // ここで main.ts 内の console.log も呼び出され、結果がコンソールに表示される
         const mod = await import(/* @vite-ignore */ blobUrl);
-
-        // ここでinputを受け取って呼び出す
-        const userInput = Number(
-          prompt("数値を入力してください", "10") || "10"
-        );
-        const resultValue = mod.main({ _R: userInput });
+        // ここで、output.props.input に対応する値の入力を求める
+        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+        const userInput: { [key: string]: any } = {};
+        for (const input of output.props.input) {
+          const v = prompt(`${input.name}(${input.type}) = `);
+          if (v) {
+            if (input.type.includes("[]")) {
+              if (input.type.includes("number")) {
+                userInput[`_${input.name}`] = [Number.parseFloat(v)];
+              } else {
+                userInput[`_${input.name}`] = [v];
+              }
+            } else if (input.type === "number") {
+              userInput[`_${input.name}`] = Number.parseFloat(v);
+            } else {
+              userInput[`_${input.name}`] = v;
+            }
+          }
+        }
+        const resultValue = mod.main(userInput);
         setResult(resultValue);
-
-        // setResult(mod.result);
       })
       .catch((e) => {
         console.error(e);
@@ -110,12 +141,27 @@ const App: React.FC = () => {
               type="button"
               className="tabButton"
               onClick={handleRun}
-              disabled={!output}
+              disabled={output.output === ""}
             >
               実行
             </button>
           </div>
-          {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
+          {Array.isArray(result) ? (
+            <ul>
+              {result.map((item, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                <li key={idx}>
+                  {output.props.output.map((o) => (
+                    <p key={o.name}>
+                      {o.name}({o.type}) = {String(item[o.name])},{" "}
+                    </p>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <pre>{JSON.stringify(result, null, 2)}</pre>
+          )}
         </div>
       </div>
     </>

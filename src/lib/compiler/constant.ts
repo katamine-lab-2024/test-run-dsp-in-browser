@@ -88,6 +88,19 @@ export const STRUCT_TYPE = {
   VECTOR: "vector",
 } as const;
 
+// typeScriptの型
+export const NEW_SIMPLE_TYPE = {
+  NUMBER: "number",
+  STRING: "string",
+  BOOLEAN: "boolean",
+} as const;
+
+// 構造変数の型
+export const NEW_STRUCT_TYPE = {
+  ARRAY: "array",
+  OBJECT: "object",
+} as const;
+
 /**
  * 新しい構文木ノードの種類
  */

@@ -1,18 +1,15 @@
-export class Variable {
+export class Variable<T extends string | number | boolean> {
   /**
    * `Variable`クラスの値の型
    * @type `string | number | boolean | null`
    */
-  protected value: Value | null = null;
+  protected value: T | null = null;
 
   /**
    * `Variable`クラスのコンストラクタ
    * @param val `string | number | boolean | undefined`
    */
-  public constructor(val?: Value);
-  public constructor(val: Value);
-
-  public constructor(val?: Value) {
+  public constructor(val?: T) {
     if (val === undefined) return;
     this.value = val;
   }
@@ -21,7 +18,7 @@ export class Variable {
    * 値を設定する
    * @param v
    */
-  public setValue(v: Value) {
+  public setValue(v: T): void {
     this.value = v;
   }
 
@@ -29,7 +26,7 @@ export class Variable {
    * 値を取得する
    * @returns 値
    */
-  public getValue(): Value {
+  public getValue(): T {
     if (this.value === null) throw new Error("null value");
     return this.value;
   }
@@ -70,53 +67,52 @@ export class Variable {
   /**
    * 値が`null`でないことを確認する
    */
-  public isNotNull(): this is Variable & { value: NonNullable<Value> } {
+  public isNotNull(): this is Variable<T> & { value: NonNullable<Value> } {
     return this.value !== null;
   }
 
-  public isNumber(): this is Variable & { value: number } {
+  public isNumber(): this is Variable<T> & { value: number } {
     return typeof this.value === "number";
   }
 
-  public isString(): this is Variable & { value: string } {
+  public isString(): this is Variable<T> & { value: string } {
     return typeof this.value === "string";
   }
 
-  public add(v: Variable): Variable {
+  public add(v: Variable<T>): Variable<T> {
     if (this.isString() && v.isString()) {
-      return new Variable(this.value + v.value);
+      return new Variable<T>((this.value + v.value) as T);
     }
-
     return this.performOperation(v, (a, b) => a + b, "addition");
   }
 
-  public sub(v: Variable): Variable {
+  public sub(v: Variable<T>): Variable<T> {
     return this.performOperation(v, (a, b) => a - b, "subtraction");
   }
 
-  public mul(v: Variable): Variable {
+  public mul(v: Variable<T>): Variable<T> {
     return this.performOperation(v, (a, b) => a * b, "multiplication");
   }
 
-  public div(v: Variable): Variable {
+  public div(v: Variable<T>): Variable<T> {
     return this.performOperation(v, (a, b) => a / b, "division");
   }
 
-  public mod(v: Variable): Variable {
+  public mod(v: Variable<T>): Variable<T> {
     return this.performOperation(v, (a, b) => a % b, "modulo");
   }
 
   private performOperation(
-    v: Variable,
+    v: Variable<T>,
     operation: (a: number, b: number) => number,
     operatorName: string
-  ): Variable {
+  ): Variable<T> {
     if (!this.isNotNull() || !v.isNotNull()) {
       throw new Error("null value");
     }
 
     if (this.isNumber() && v.isNumber()) {
-      return new Variable(operation(this.value, v.value));
+      return new Variable<T>(operation(this.value, v.value) as T);
     }
 
     throw new Error(`Incompatible types for ${operatorName}`);

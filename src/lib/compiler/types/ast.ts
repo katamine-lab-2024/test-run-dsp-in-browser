@@ -109,7 +109,7 @@ export type SqrtNode = {
 } & BaseNode;
 
 // 組み込みモジュール
-export type BuildInNode = ForNode | SelectNode | SqrtNode | Expr;
+export type BuildInNode = ForNode | SelectNode | SqrtNode | TestNode | Expr;
 
 // 代入文
 export type AssignNode = {

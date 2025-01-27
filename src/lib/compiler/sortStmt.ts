@@ -43,7 +43,7 @@ const classifyStatements = (
           phase: "assume",
           target: innerStmt.lhs as VarNode,
         });
-      } else {
+      } else if (!(innerStmt.rhs.type === NODE_TYPE.TEST)) {
         const operands: VarNode[] = [];
         if (innerStmt.rhs.type === NODE_TYPE.CALL_EXPR)
           operands.push(...collectVariables(innerStmt.rhs, (v) => !v.isInput));
@@ -58,6 +58,30 @@ const classifyStatements = (
           phase: "calc",
           target: innerStmt.lhs as VarNode,
           operand: operands,
+        });
+      } else {
+        const constraint = innerStmt.lhs as VarNode;
+        const vars = collectVariables(innerStmt.rhs.cond as Expr);
+        const target = vars.find((v) => !v.isInput) ?? vars[0];
+        const operand = vars.filter((v) => v !== target);
+        categories.test.push({
+          type: "stmt-block",
+          token: s.token,
+          body: [
+            {
+              type: "stmt",
+              token: s.token,
+              stmt: {
+                type: NODE_TYPE.ASSIGN,
+                lhs: constraint,
+                rhs: innerStmt.rhs,
+                token: innerStmt.token,
+              },
+            },
+          ],
+          phase: "test",
+          target: target,
+          operand: operand,
         });
       }
     } else if (innerStmt.type === NODE_TYPE.TEST) {
@@ -152,22 +176,31 @@ const margeCalcTest = (sorted: StmtBlock[]) => {
   let i = 0;
   while (i < sorted.length) {
     const s = sorted[i];
-    // testじゃなかったら、次へ
     if (s.phase !== "test") {
       i++;
       continue;
     }
-    const calc = sorted[i - 1];
-    // sとcalcのbodyを結合
-    const body = calc.body.concat(s.body);
-    // sortedからcalcを削除
-    sorted.splice(i - 1, 1);
-    // sortedのs.bodyをbodyに置き換え
-    sorted[i - 1] = {
-      ...calc,
-      body,
-    };
-    i++;
+    // testの要素を見つけたので、1つずつ前に戻る
+    let j = i - 1;
+    let merged = s;
+    while (j >= 0) {
+      const c = sorted[j];
+      if (c.phase === "calc") {
+        const body = c.body.concat(merged.body);
+        sorted.splice(j + 1, 1);
+        merged = { ...c, body };
+        // 現在の位置(j)で上書き
+        sorted[j] = { ...merged };
+      } else {
+        j++;
+        break;
+      }
+      j--;
+    }
+    // 次の要素で結合対象にならないように、結合したphaseをtestに変更
+    sorted[j] = { ...merged, phase: "test" };
+    // sortedの長さが変わった分、インデックスを調整
+    i = j + 1;
   }
   return sorted;
 };

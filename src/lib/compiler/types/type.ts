@@ -1,4 +1,9 @@
-import type { SIMPLE_TYPE, STRUCT_TYPE } from "../constant";
+import type {
+  NEW_SIMPLE_TYPE,
+  NEW_STRUCT_TYPE,
+  SIMPLE_TYPE,
+  STRUCT_TYPE,
+} from "../constant";
 import type { Token } from "./token";
 
 // 変数の型
@@ -32,14 +37,13 @@ export type StructType = {
 export type Type = SimpleType | StructType | BaseType;
 
 // 新しい型
-
 export type NewSimple = {
-  type: "number" | "string" | "boolean";
+  type: (typeof NEW_SIMPLE_TYPE)[keyof typeof NEW_SIMPLE_TYPE];
   token: Token;
 };
 
 export type NewStruct = {
-  type: "list" | "vector";
+  type: (typeof NEW_STRUCT_TYPE)[keyof typeof NEW_STRUCT_TYPE];
   member: NewType[];
   token: Token;
 };

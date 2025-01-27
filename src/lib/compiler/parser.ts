@@ -636,6 +636,7 @@ class Parser {
   /**
    * `build_in = "for" "(" expr "," expr "," expr ")"
    *            | "sqrt" "(" expr ")"
+   *           todo: | "test" "(" expr ")" booleanを返さなければ
    *            | expr`
    * @returns {BuildInNode} 組み込み関数
    */
@@ -646,10 +647,40 @@ class Parser {
       this.next();
       this.consume("(");
       const from = this.parseExpr();
+      // fromが変数の場合は、型が整数か実数であることを確認
+      if (from.type === NODE_TYPE.VAR) {
+        const ty = (from as VarNode).valueType;
+        if (ty.type !== SIMPLE_TYPE.INTEGER && ty.type !== SIMPLE_TYPE.REAL) {
+          this.errorList.push({
+            message: `Expected integer or real, but got ${ty.type}.`,
+            position: ty.token.position,
+          });
+        }
+      }
       this.consume(",");
       const to = this.parseExpr();
+      // toが変数の場合は、型が整数か実数であることを確認
+      if (to.type === NODE_TYPE.VAR) {
+        const ty = (to as VarNode).valueType;
+        if (ty.type !== SIMPLE_TYPE.INTEGER && ty.type !== SIMPLE_TYPE.REAL) {
+          this.errorList.push({
+            message: `Expected integer or real, but got ${ty.type}.`,
+            position: ty.token.position,
+          });
+        }
+      }
       this.consume(",");
       const inc = this.parseExpr();
+      // incが変数の場合は、型が整数か実数であることを確認
+      if (inc.type === NODE_TYPE.VAR) {
+        const ty = (inc as VarNode).valueType;
+        if (ty.type !== SIMPLE_TYPE.INTEGER && ty.type !== SIMPLE_TYPE.REAL) {
+          this.errorList.push({
+            message: `Expected integer or real, but got ${ty.type}.`,
+            position: ty.token.position,
+          });
+        }
+      }
       this.consume(")");
       return {
         type: NODE_TYPE.FOR,
@@ -664,6 +695,16 @@ class Parser {
       this.next();
       this.consume("(");
       const list = this.parsePrimary() as Primary;
+      // listが変数の場合は、型がリストであることを確認
+      if (list.type === NODE_TYPE.VAR) {
+        const ty = (list as VarNode).valueType;
+        if (ty.type !== STRUCT_TYPE.LIST) {
+          this.errorList.push({
+            message: `Expected list, but got ${ty.type}.`,
+            position: ty.token.position,
+          });
+        }
+      }
       this.consume(")");
       return {
         type: NODE_TYPE.SELECT,
@@ -680,6 +721,18 @@ class Parser {
       return {
         type: NODE_TYPE.SQRT,
         expr: expr,
+        token: tok,
+      };
+    }
+    // "test" "(" expr ")"
+    if (this.isCurrent("test")) {
+      this.next();
+      this.consume("(");
+      const expr = this.parseExpr();
+      this.consume(")");
+      return {
+        type: NODE_TYPE.TEST,
+        cond: expr,
         token: tok,
       };
     }
@@ -890,7 +943,7 @@ class Parser {
    * @returns {Expr} 乗算式
    */
   parseMul(): Expr {
-    let node = this.parseUnary();
+    let node = this.parsePow();
     let token: Token;
     for (;;) {
       if (this.isCurrent("*")) {
@@ -900,7 +953,7 @@ class Parser {
           type: NODE_TYPE.CALL_EXPR,
           callee: OP_TYPE.MUL,
           lhs: node,
-          rhs: this.parseUnary(),
+          rhs: this.parsePow(),
           token: token,
         };
       } else if (this.isCurrent("/")) {
@@ -910,7 +963,7 @@ class Parser {
           type: NODE_TYPE.CALL_EXPR,
           callee: OP_TYPE.DIV,
           lhs: node,
-          rhs: this.parseUnary(),
+          rhs: this.parsePow(),
           token: token,
         };
       } else if (this.isCurrent("mod")) {
@@ -920,23 +973,34 @@ class Parser {
           type: NODE_TYPE.CALL_EXPR,
           callee: OP_TYPE.MOD,
           lhs: node,
-          rhs: this.parseUnary(),
-          token: token,
-        };
-      } else if (this.isCurrent("^")) {
-        token = this.peek();
-        this.next();
-        node = {
-          type: NODE_TYPE.CALL_EXPR,
-          callee: OP_TYPE.POW,
-          lhs: node,
-          rhs: this.parseUnary(),
+          rhs: this.parsePow(),
           token: token,
         };
       } else {
         return node;
       }
     }
+  }
+
+  /**
+   * `pow = unary ("^" pow)?`
+   * べき乗は右結合のため、再帰的にパースする
+   * @returns {Expr} べき乗演算
+   */
+  parsePow(): Expr {
+    let node = this.parseUnary();
+    if (this.isCurrent("^")) {
+      const token = this.peek();
+      this.next();
+      node = {
+        type: NODE_TYPE.CALL_EXPR,
+        callee: OP_TYPE.POW,
+        lhs: node,
+        rhs: this.parsePow(), // 右結合にするための再帰呼び出し
+        token: token,
+      };
+    }
+    return node;
   }
 
   /**
@@ -1066,12 +1130,14 @@ class Parser {
             value: "dummy",
           },
         };
+        let isInput = false;
         this.next();
         // typeがあれば、型を解析してlocalListに登録
         if (this.isCurrent(":")) {
           this.consume(":");
           ty = this.parseType();
-          this.pushVar(tok, ty, true);
+          const v = this.pushVar(tok, ty, true);
+          isInput = v.isInput;
         }
         // 型がなければ、すでに存在するかどうかを確認
         const fv = this.findVar(tok);
@@ -1084,15 +1150,14 @@ class Parser {
             type: NODE_TYPE.DUMMY,
             token: tok,
           };
-        } else {
-          ty = fv.valueType;
         }
+        ty = fv.valueType;
         return {
-          type: fv.type,
+          type: NODE_TYPE.VAR,
           name: tok.value,
           valueType: ty,
           token: tok,
-          isInput: fv.isInput,
+          isInput: isInput,
         };
       }
       default: {

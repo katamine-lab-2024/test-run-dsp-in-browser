@@ -111,7 +111,7 @@ export type SqrtNode = {
 } & BaseNode;
 
 // 組み込みモジュール
-export type BuildInNode = ForNode | SelectNode | SqrtNode | Expr;
+export type BuildInNode = ForNode | SelectNode | SqrtNode | If | Expr;
 
 // 代入文
 export type AssignNode = {
@@ -132,6 +132,7 @@ export type If = {
   cond: Expr;
   then?: StmtNode[];
   else?: If | StmtNode[];
+  constraint?: VarNode;
 } & BaseNode;
 
 // エラー対応にダミーを含む
@@ -203,7 +204,7 @@ export type Visitor = {
   [NODE_TYPE.SQRT]: (node: ast.SqrtNode) => SqrtNode;
   [NODE_TYPE.FOR]: (node: ast.ForNode) => ForNode;
   [NODE_TYPE.SELECT]: (node: ast.SelectNode) => SelectNode;
-  [NODE_TYPE.ASSIGN]: (node: ast.AssignNode) => AssignNode | Return;
+  [NODE_TYPE.ASSIGN]: (node: ast.AssignNode) => AssignNode | Return | If;
   [NODE_TYPE.TEST]: (node: ast.TestNode) => If;
   [stmtBlockType]: (node: ast.StmtBlock) => ClassNode;
   [NODE_TYPE.BLOCK]: (node: ast.Block) => ClassNode;

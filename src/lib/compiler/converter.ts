@@ -3,7 +3,7 @@ import { sortStmt } from "./sortStmt";
 import type * as ast from "./types/ast";
 import type * as newAst from "./types/newAst";
 import type { Visitor } from "./types/newAst";
-import type { Type, NewType } from "./types/type";
+import type { Type, NewType, StructType } from "./types/type";
 
 class ASTConverter {
   private params: newAst.VarNode[] = [];
@@ -18,20 +18,26 @@ class ASTConverter {
         return { type: "boolean", token: type.token };
       case "atom":
         return { type: "string", token: type.token };
-      case "list":
+      case "list": {
+        const innerType = (type as StructType).member.map((t) =>
+          this.convertType(t)
+        );
         return {
-          type: "list",
-          member:
-            "member" in type ? type.member.map((t) => this.convertType(t)) : [],
+          type: "array",
+          member: innerType,
           token: type.token,
         };
-      case "vector":
+      }
+      case "vector": {
+        const innerType = (type as StructType).member.map((t) =>
+          this.convertType(t)
+        );
         return {
-          type: "vector",
-          member:
-            "member" in type ? type.member.map((t) => this.convertType(t)) : [],
+          type: "object",
+          member: innerType,
           token: type.token,
         };
+      }
       default:
         return { type: "dummy", token: type.token };
     }
@@ -127,7 +133,7 @@ class ASTConverter {
       [NODE_TYPE.ASSIGN]: (node: ast.AssignNode) => {
         const lhs = this.visitNode(node.lhs, visitor) as newAst.VarNode;
         const rhs = this.visitNode(node.rhs, visitor);
-
+        // return
         if (
           rhs.type === NEW_NODE_TYPE.FOR ||
           rhs.type === NEW_NODE_TYPE.SELECT
@@ -151,7 +157,20 @@ class ASTConverter {
 
           return { type: NEW_NODE_TYPE.RETURN, token: node.token, value };
         }
-
+        // assign
+        if (rhs.type === NEW_NODE_TYPE.IF) {
+          return {
+            type: NODE_TYPE.ASSIGN,
+            token: node.token,
+            lhs: lhs,
+            rhs: {
+              type: NEW_NODE_TYPE.IF,
+              token: node.token,
+              cond: rhs.cond,
+              constraint: lhs,
+            },
+          };
+        }
         return {
           type: NODE_TYPE.ASSIGN,
           token: node.token,

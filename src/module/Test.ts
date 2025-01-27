@@ -1,12 +1,13 @@
-import { Predicate } from "./Predicate";
+import type { Predicate } from "./Predicate";
 import { createInnerClass, type IC } from "./util";
+import { Variable } from "./Variable";
 import type { VM } from "./VM";
 
 export class Test implements Predicate {
   /**
    * 結果の出力変数
    */
-  // private result: Variable;
+  private result: Variable<boolean>;
   /**
    * 判定する式
    */
@@ -22,10 +23,14 @@ export class Test implements Predicate {
    * @param condition 判定する式
    * @param cont 継続ゴール
    */
-  public constructor(condition: boolean, cont: Predicate) {
-    // this.result = result;
+  public constructor(
+    condition: boolean,
+    cont: Predicate,
+    result?: Variable<boolean>
+  ) {
     this.condition = condition;
     this.cont = cont;
+    this.result = result ?? new Variable(false);
   }
 
   public exec(vm: VM): Predicate {
@@ -44,10 +49,10 @@ export class Test implements Predicate {
             class implements Predicate {
               public exec(vm: VM) {
                 if (outerThis.condition) {
-                  // outerThis.result.setValue(true);
-                  return outerThis.cont;
+                  outerThis.result.setValue(true);
                 }
-                return Predicate.failure;
+                outerThis.result.setValue(false);
+                return outerThis.cont;
               }
             }
         );
