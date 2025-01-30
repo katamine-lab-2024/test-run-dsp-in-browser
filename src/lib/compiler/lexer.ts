@@ -152,16 +152,26 @@ class Lexer {
 
       // 数値(実数を含む)
       if (NUMBERS.test(this.getChar())) {
-        const val = this.accept(NUMBERS);
+        const integerPart = this.accept(NUMBERS);
+        let fractionalPart = "";
         if (this.getChar() === ".") {
           this.consumeChar();
-          const decimal = this.accept(NUMBERS);
-          this.tokenList.push(
-            this.newToken(TOKEN_TYPE.NUMBER, `${val}.${decimal}`)
-          );
-          continue;
+          fractionalPart = `.${this.accept(NUMBERS)}`;
         }
-        this.tokenList.push(this.newToken(TOKEN_TYPE.NUMBER, val));
+        let exponentPart = "";
+        if (/[eE]/.test(this.getChar())) {
+          exponentPart += this.consumeChar(); // e または E
+          if (/[+\-]/.test(this.getChar())) {
+            exponentPart += this.consumeChar(); // + または -
+          }
+          exponentPart += this.accept(NUMBERS);
+        }
+        this.tokenList.push(
+          this.newToken(
+            TOKEN_TYPE.NUMBER,
+            integerPart + fractionalPart + exponentPart
+          )
+        );
         continue;
       }
 
@@ -215,6 +225,7 @@ const KEYWORDS = [
   "select",
   "for",
   "sqrt",
+  "exp",
   "call",
   "when",
   "test",

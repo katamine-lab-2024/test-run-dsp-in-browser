@@ -2,6 +2,7 @@ import type {
   AssignNode,
   BlockNode,
   BuildInNode,
+  CalcNode,
   Expr,
   Member,
   ModuleNode,
@@ -635,9 +636,8 @@ class Parser {
 
   /**
    * `build_in = "for" "(" expr "," expr "," expr ")"
-   *            | "sqrt" "(" expr ")"
-   *           todo: | "test" "(" expr ")" booleanを返さなければ
-   *            | expr`
+   *            | "select" "(" list ")"
+   *            | calc`
    * @returns {BuildInNode} 組み込み関数
    */
   parseBuildIn(): BuildInNode {
@@ -646,7 +646,7 @@ class Parser {
     if (this.isCurrent("for")) {
       this.next();
       this.consume("(");
-      const from = this.parseExpr();
+      const from = this.parseExpr() as Expr;
       // fromが変数の場合は、型が整数か実数であることを確認
       if (from.type === NODE_TYPE.VAR) {
         const ty = (from as VarNode).valueType;
@@ -658,7 +658,7 @@ class Parser {
         }
       }
       this.consume(",");
-      const to = this.parseExpr();
+      const to = this.parseExpr() as Expr;
       // toが変数の場合は、型が整数か実数であることを確認
       if (to.type === NODE_TYPE.VAR) {
         const ty = (to as VarNode).valueType;
@@ -670,7 +670,7 @@ class Parser {
         }
       }
       this.consume(",");
-      const inc = this.parseExpr();
+      const inc = this.parseExpr() as Expr;
       // incが変数の場合は、型が整数か実数であることを確認
       if (inc.type === NODE_TYPE.VAR) {
         const ty = (inc as VarNode).valueType;
@@ -712,31 +712,7 @@ class Parser {
         token: tok,
       };
     }
-    // "sqrt" "(" expr ")"
-    if (this.isCurrent("sqrt")) {
-      this.next();
-      this.consume("(");
-      const expr = this.parseExpr();
-      this.consume(")");
-      return {
-        type: NODE_TYPE.SQRT,
-        expr: expr,
-        token: tok,
-      };
-    }
-    // "test" "(" expr ")"
-    if (this.isCurrent("test")) {
-      this.next();
-      this.consume("(");
-      const expr = this.parseExpr();
-      this.consume(")");
-      return {
-        type: NODE_TYPE.TEST,
-        cond: expr,
-        token: tok,
-      };
-    }
-    // expr
+    // calc
     return this.parseExpr();
   }
 
@@ -1021,6 +997,7 @@ class Parser {
       this.next();
       return this.parsePrimary();
     }
+    const tok = this.peek();
     return this.parsePrimary();
   }
 
@@ -1036,6 +1013,31 @@ class Parser {
    * @returns {Expr} 基本式
    */
   parsePrimary(): Expr {
+    const tok = this.peek();
+    // "sqrt" "(" expr ")"
+    if (this.isCurrent("sqrt")) {
+      this.next();
+      this.consume("(");
+      const expr = this.parseExpr();
+      this.consume(")");
+      return {
+        type: NODE_TYPE.SQRT,
+        expr: expr,
+        token: tok,
+      };
+    }
+    // "exp" "(" expr ")"
+    if (this.isCurrent("exp")) {
+      this.next();
+      this.consume("(");
+      const expr = this.parseExpr();
+      this.consume(")");
+      return {
+        type: NODE_TYPE.EXP,
+        expr: expr,
+        token: tok,
+      };
+    }
     // "(" expr ")"
     if (this.isCurrent("(")) {
       this.next();

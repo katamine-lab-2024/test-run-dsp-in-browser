@@ -313,8 +313,12 @@ class CodeGenerator {
   private stmtGen(stmt: StmtNode, cont: string | undefined): string {
     switch (stmt.type) {
       case "if": {
+        const cond = this.exprGen(stmt.cond, false);
+        if (cond.includes("constraint")) {
+          return `                return ${cont};`;
+        }
         return [
-          `                if (!(${this.exprGen(stmt.cond, false)})) {`,
+          `                if (!(${cond})) {`,
           "                  return Predicate.failure;",
           "                }",
           `                return ${cont};`,
@@ -324,9 +328,6 @@ class CodeGenerator {
         const ths = (stmt.lhs as VarNode).isInParam
           ? "outerThis"
           : "methodThis";
-        if (stmt.rhs.type === "if") {
-          return this.buildInGen(stmt.rhs, cont);
-        }
         return [
           `                ${ths}.${
             (stmt.lhs as VarNode).name
@@ -368,28 +369,6 @@ class CodeGenerator {
           cont,
           ")",
         ].join("");
-      }
-      case "sqrt": {
-        return ["Math.sqrt(", ...this.exprGen(buildIn.expr, false), ")"].join(
-          ""
-        );
-      }
-      case "if": {
-        // outer確定かも
-        const ths = (buildIn.constraint as VarNode).isInParam
-          ? "outerThis"
-          : "methodThis";
-        return [
-          `                if (!(${this.exprGen(buildIn.cond, false)})) {`,
-          `                ${ths}.${
-            (buildIn.constraint as VarNode).name
-          }.setValue(false);`,
-          "                } else {",
-          `                ${ths}.${
-            (buildIn.constraint as VarNode).name
-          }.setValue(true);`,
-          "                }",
-        ].join("\n");
       }
       default:
         return this.exprGen(buildIn, false);
@@ -492,6 +471,16 @@ class CodeGenerator {
         return isVarRef
           ? `${ths}.${primary.name}`
           : `${ths}.${primary.name}.${getMethod}()`;
+      }
+      case "sqrt": {
+        return ["Math.sqrt(", ...this.exprGen(primary.expr, false), ")"].join(
+          ""
+        );
+      }
+      case "exp": {
+        return ["Math.exp(", ...this.exprGen(primary.expr, false), ")"].join(
+          ""
+        );
       }
       default:
         return "";

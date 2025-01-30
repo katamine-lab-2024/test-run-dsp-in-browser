@@ -118,6 +118,11 @@ class ASTConverter {
         return { type: NODE_TYPE.SQRT, token: node.token, expr };
       },
 
+      [NODE_TYPE.EXP]: (node: ast.ExpNode) => {
+        const expr = this.visitNode(node.expr, visitor) as newAst.Expr;
+        return { type: NODE_TYPE.EXP, token: node.token, expr };
+      },
+
       [NODE_TYPE.FOR]: (node: ast.ForNode) => {
         const from = this.visitNode(node.from, visitor) as newAst.Expr;
         const to = this.visitNode(node.to, visitor) as newAst.Expr;
@@ -158,19 +163,6 @@ class ASTConverter {
           return { type: NEW_NODE_TYPE.RETURN, token: node.token, value };
         }
         // assign
-        if (rhs.type === NEW_NODE_TYPE.IF) {
-          return {
-            type: NODE_TYPE.ASSIGN,
-            token: node.token,
-            lhs: lhs,
-            rhs: {
-              type: NEW_NODE_TYPE.IF,
-              token: node.token,
-              cond: rhs.cond,
-              constraint: lhs,
-            },
-          };
-        }
         return {
           type: NODE_TYPE.ASSIGN,
           token: node.token,

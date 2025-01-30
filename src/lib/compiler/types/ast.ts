@@ -54,7 +54,13 @@ export type Member = {
 } & BaseNode;
 
 // Primary
-export type Primary = LiteralNode | VarNode | ListNode | StructNode | Dummy;
+export type Primary =
+  | LiteralNode
+  | VarNode
+  | ListNode
+  | StructNode
+  | CalcNode
+  | Dummy;
 
 // 単項演算子
 export type UnaryNode = {
@@ -86,6 +92,9 @@ export type BinaryNode = {
 // 式
 export type Expr = Primary | BinaryNode | UnaryNode;
 
+// 計算
+export type CalcNode = SqrtNode | ExpNode;
+
 // 仮定・生成
 // for
 export type ForNode = {
@@ -108,8 +117,14 @@ export type SqrtNode = {
   expr: Expr;
 } & BaseNode;
 
+// 指数関数: exp
+export type ExpNode = {
+  type: typeof NODE_TYPE.EXP;
+  expr: Expr;
+} & BaseNode;
+
 // 組み込みモジュール
-export type BuildInNode = ForNode | SelectNode | SqrtNode | TestNode | Expr;
+export type BuildInNode = ForNode | SelectNode | Expr;
 
 // 代入文
 export type AssignNode = {

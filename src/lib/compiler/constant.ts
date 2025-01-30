@@ -47,6 +47,7 @@ export const NODE_TYPE = {
   SELECT: "select",
   CALL: "call",
   SQRT: "sqrt",
+  EXP: "exp",
 } as const;
 
 // 演算子の種類
@@ -134,4 +135,5 @@ export const NEW_NODE_TYPE = {
   FOR: "for",
   SELECT: "select",
   SQRT: "sqrt",
+  EXP: "exp",
 } as const;

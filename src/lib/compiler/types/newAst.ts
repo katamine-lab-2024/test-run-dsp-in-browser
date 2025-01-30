@@ -55,7 +55,13 @@ export type Member = {
 } & BaseNode;
 
 // Primary
-export type Primary = LiteralNode | VarNode | ListNode | StructNode | Dummy;
+export type Primary =
+  | LiteralNode
+  | VarNode
+  | ListNode
+  | StructNode
+  | Calc
+  | Dummy;
 
 // 単項演算子
 export type UnaryNode = {
@@ -87,6 +93,9 @@ export type BinaryNode = {
 // 式
 export type Expr = Primary | UnaryNode | BinaryNode;
 
+// 計算
+export type Calc = SqrtNode | ExpNode;
+
 // 仮定・生成
 // for
 export type ForNode = {
@@ -110,8 +119,14 @@ export type SqrtNode = {
   expr: Expr;
 } & BaseNode;
 
+// 指数関数: exp
+export type ExpNode = {
+  type: typeof NEW_NODE_TYPE.EXP;
+  expr: Expr;
+} & BaseNode;
+
 // 組み込みモジュール
-export type BuildInNode = ForNode | SelectNode | SqrtNode | If | Expr;
+export type BuildInNode = ForNode | SelectNode | Expr;
 
 // 代入文
 export type AssignNode = {
@@ -184,6 +199,7 @@ export type Node =
   | ForNode
   | SelectNode
   | SqrtNode
+  | ExpNode
   | AssignNode
   | Return
   | If
@@ -202,6 +218,7 @@ export type Visitor = {
   [NODE_TYPE.MEMBER]: (node: ast.Member) => VarNode;
   [NODE_TYPE.CALL_EXPR]: (node: ast.Expr) => Expr;
   [NODE_TYPE.SQRT]: (node: ast.SqrtNode) => SqrtNode;
+  [NODE_TYPE.EXP]: (node: ast.ExpNode) => ExpNode;
   [NODE_TYPE.FOR]: (node: ast.ForNode) => ForNode;
   [NODE_TYPE.SELECT]: (node: ast.SelectNode) => SelectNode;
   [NODE_TYPE.ASSIGN]: (node: ast.AssignNode) => AssignNode | Return | If;
