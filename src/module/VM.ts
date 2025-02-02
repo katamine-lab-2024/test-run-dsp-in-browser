@@ -72,6 +72,9 @@ export class VM {
    * @returns `call`メソッドの戻り値
    */
   public redo(): boolean {
-    return this.call(this.getChoicePoint());
+    const cp = this.getChoicePoint();
+    if (!cp) return false;
+    this.popChoicePoint();
+    return this.call(cp);
   }
 }

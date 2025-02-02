@@ -152,8 +152,8 @@ export type TestNode = {
 export type CallNode = {
   type: typeof NODE_TYPE.CALL;
   module: string;
-  input: Expr;
-  output: Expr;
+  input: StructNode;
+  output: StructNode;
 } & BaseNode;
 
 // 文式
@@ -174,6 +174,7 @@ export type Block = {
   body: StmtNode[];
   // block内で定義された変数
   varList: VarNode[];
+  when?: Expr;
 } & BaseNode;
 
 const stmtBlockType = "stmt-block" as const;

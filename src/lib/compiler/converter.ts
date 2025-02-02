@@ -90,6 +90,18 @@ class ASTConverter {
         };
       },
 
+      [NODE_TYPE.VECTOR]: (node: ast.StructNode) => {
+        const member: newAst.Member[] = node.member.map((m) => {
+          const v = this.visitNode(m, visitor) as newAst.VarNode | newAst.Expr;
+          return { type: NEW_NODE_TYPE.MEMBER, token: m.token, value: v };
+        });
+        return {
+          type: NEW_NODE_TYPE.OBJECT,
+          token: node.token,
+          member: member,
+        };
+      },
+
       [NODE_TYPE.CALL_EXPR]: (node: ast.Expr) => {
         if ("callee" in node) {
           const lhs = this.visitNode(node.lhs, visitor) as newAst.Expr;
@@ -176,6 +188,27 @@ class ASTConverter {
         return { type: NEW_NODE_TYPE.IF, token: node.token, cond };
       },
 
+      [NODE_TYPE.WHEN]: (node: ast.WhenNode) => {
+        const cond = this.visitNode(node.cond, visitor) as newAst.Expr;
+        return {
+          type: NEW_NODE_TYPE.WHEN,
+          token: node.token,
+          cond,
+        };
+      },
+
+      [NODE_TYPE.CALL]: (node: ast.CallNode) => {
+        const input = this.visitNode(node.input, visitor) as newAst.Expr;
+        const output = this.visitNode(node.output, visitor) as newAst.Expr;
+        return {
+          type: NEW_NODE_TYPE.CALL,
+          token: node.token,
+          module: node.module,
+          input: input,
+          output: output,
+        };
+      },
+
       ["stmt-block" as const]: (node: ast.StmtBlock) => {
         const body = node.body.map((stmt) =>
           this.visitNode((stmt as ast.Stmt).stmt, visitor)
@@ -196,6 +229,9 @@ class ASTConverter {
       },
 
       [NODE_TYPE.BLOCK]: (node: ast.Block) => {
+        let when: newAst.Expr | undefined;
+        if (node.when) when = this.visitNode(node.when, visitor) as newAst.Expr;
+
         const sortedStmts: ast.StmtBlock[] = sortStmt(node.body);
         const newBody = sortedStmts.map((stmt, index) => {
           const innerClass = this.visitNode(stmt, visitor) as newAst.Class;
@@ -214,6 +250,7 @@ class ASTConverter {
           name: "",
           fieldList: newField,
           body: newBody,
+          when: when,
         };
       },
 

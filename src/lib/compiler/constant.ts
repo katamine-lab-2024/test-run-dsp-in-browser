@@ -131,9 +131,11 @@ export const NEW_NODE_TYPE = {
 
   // 制御構文
   IF: "if",
+  WHEN: "when",
   ELSE: "else",
   FOR: "for",
   SELECT: "select",
   SQRT: "sqrt",
   EXP: "exp",
+  CALL: "call",
 } as const;

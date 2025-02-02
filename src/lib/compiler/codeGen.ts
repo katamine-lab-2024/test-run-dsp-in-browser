@@ -5,6 +5,7 @@ import type {
   Expr,
   Program,
   StmtNode,
+  StructNode,
   VarNode,
 } from "./types/newAst";
 import type { NewType } from "./types/type";
@@ -112,7 +113,9 @@ class CodeGenerator {
       ),
       `const p: Predicate = new ${
         clsName.charAt(0).toUpperCase() + clsName.slice(1)
-      }(${fieldList.map((f) => `_${f.name}`).join(", ")}, Predicate.success);`,
+      }Class (${fieldList
+        .map((f) => `_${f.name}`)
+        .join(", ")}, Predicate.success);`,
     ];
     const result = [
       "const result: {",
@@ -148,7 +151,7 @@ class CodeGenerator {
     const name = module.name;
     const classDecl = `export class ${
       name.charAt(0).toUpperCase() + name.slice(1)
-    } implements Predicate {`;
+    }Class implements Predicate {`;
 
     const field = [
       ...module.fieldList
@@ -184,14 +187,76 @@ class CodeGenerator {
 
     const blockList = module.body.filter((stmt) => stmt.type === "class");
 
-    const exec = [
-      "  public exec(vm: VM): Predicate {",
-      ...blockList.map(
-        (block) => `    return new this.Method_${block.name}().exec(vm);`
-      ),
-      "  }",
-      "",
-    ];
+    let exec: string[] = [];
+
+    if (blockList.length === 1) {
+      exec = [
+        "  public exec(vm: VM): Predicate {",
+        ...blockList.map(
+          (block) => `    return new this.Method_${block.name}().exec(vm);`
+        ),
+        "  }",
+        "",
+      ];
+    } else {
+      // whenで条件分岐
+      const anySuccess = [];
+      const newP = [];
+      const conds = [];
+      for (const block of blockList) {
+        if (block.when) {
+          let cond = this.exprGen(block.when, false);
+          if (cond.includes("outerThis")) {
+            cond = cond.replaceAll("outerThis", "this");
+          }
+          conds.push(cond);
+          newP.push(
+            `    const method_${block.name} = new this.Method_${block.name}();`
+          );
+          anySuccess.push(
+            `    if (${cond}) {
+      return method_${block.name}.exec(vm);
+    }\n`
+          );
+        }
+      }
+      // 全てのcondが失敗するか
+      const allFail = [
+        "    if(",
+        ...conds.map((c) => `!(${c})`).join("\n      && "),
+        ") {\n",
+        "      return Predicate.failure;\n",
+        "    }\n",
+        "",
+      ];
+      // 全てのcondが成功するか
+      const allSuccess = [
+        "    if(",
+        ...conds.map((c) => `(${c})`).join("\n      && "),
+        ") {\n",
+        // blockListの先頭以外をchoicePointに追加
+        blockList
+          .filter((b) => b !== blockList[0])
+          .map((b) => {
+            return `      vm.setChoicePoint(method_${b.name});\n`;
+          }),
+        // blockListの先頭を実行
+        `      return method_${blockList[0].name}.exec(vm);\n`,
+        "    }",
+        "\n",
+      ];
+      exec = [
+        "  public exec(vm: VM): Predicate {",
+        newP.join("\n"),
+        "",
+        allFail.join(""),
+        allSuccess.join(""),
+        anySuccess.join(""),
+        // "    return Predicate.failure;",
+        "  }",
+        "",
+      ];
+    }
 
     const blockContents: string[][] = [];
     for (const block of blockList) {
@@ -274,6 +339,9 @@ class CodeGenerator {
     blockName: string,
     cont: string | undefined
   ): string[] {
+    // whenNodeを含むなら生成しない
+    let isWhen = false;
+
     const c = cont
       ? `methodThis.${blockName.toLowerCase()}_cu${cont}`
       : "outerThis.cont";
@@ -291,15 +359,20 @@ class CodeGenerator {
     );
     for (const method of methodList) {
       execBodyContents.push(
-        ...method.body.flatMap((stmt) =>
-          [
+        ...method.body.flatMap((stmt) => {
+          const s = this.stmtGen(stmt, c);
+          if (s === "when") {
+            isWhen = true;
+            return [];
+          }
+          return [
             this.stmtGen(stmt, c),
             stmt === method.body[method.body.length - 1] &&
             stmt.type === "assign"
-              ? `                return ${c};\n`
+              ? `\n                return ${c};`
               : "",
-          ].join("")
-        )
+          ].join("");
+        })
       );
     }
     const exec = [
@@ -307,11 +380,15 @@ class CodeGenerator {
       ...execBodyContents,
       "              }",
     ];
+    if (isWhen) return [];
     return [...classDecl, ...exec, "            }", "        );"];
   }
 
   private stmtGen(stmt: StmtNode, cont: string | undefined): string {
     switch (stmt.type) {
+      case "when": {
+        return "when";
+      }
       case "if": {
         const cond = this.exprGen(stmt.cond, false);
         if (cond.includes("constraint")) {
@@ -332,10 +409,41 @@ class CodeGenerator {
           `                ${ths}.${
             (stmt.lhs as VarNode).name
           }.setValue(${this.buildInGen(stmt.rhs, cont)});`,
+          // `                console.log("${
+          //   (stmt.lhs as VarNode).name
+          // }: ", ${ths}.${(stmt.lhs as VarNode).name}.getValue());`,
         ].join("\n");
       }
       case "return": {
         return `                return ${this.buildInGen(stmt.value, cont)};`;
+      }
+      case "call": {
+        // stmt.inputとstmt.outputを結合してVarNode[]に変換
+        const input = (stmt.input as StructNode).member.map(
+          (v) => v.value as VarNode
+        );
+        const output = (stmt.output as StructNode).member.map(
+          (v) => v.value as VarNode
+        );
+        const vList = input.concat(output);
+        const setup = [
+          `                const p: Predicate = new ${
+            stmt.module.charAt(0).toUpperCase() + stmt.module.slice(1)
+          }Class (`,
+          vList
+            .map((v) => `                  ${this.primaryGen(v, true)},`)
+            .join("\n"),
+          `                  ${cont}`,
+          "                );",
+        ];
+        const run = [
+          // "                for (let s: boolean = vm.call(p); s === true; s = vm.redo()) {",
+          // "                  vm.setChoicePoint(p);",
+          // "                }",
+          // "                vm.setChoicePoint(p);",
+          "                return p;",
+        ];
+        return [...setup, ...run].join("\n");
       }
       default:
         return "";

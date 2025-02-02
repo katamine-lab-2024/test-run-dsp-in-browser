@@ -11,6 +11,7 @@ import type {
   Program,
   StmtExpr,
   StmtNode,
+  StructNode,
   VarNode,
 } from "./types/ast";
 import type { CompileError } from "./types/error";
@@ -156,6 +157,7 @@ class Parser {
     // 既に定義されていたら、型検査をして返す
     const fv = this.findVar(tok);
     if (fv) {
+      //typeがdummyの時はスルー(仮)
       if (fv.valueType.type !== ty.type) {
         this.errorList.push({
           message: `Variable ${JSON.stringify(
@@ -483,11 +485,19 @@ class Parser {
     this.next();
     const bs = this.scope.block;
     this.scope.block = [];
+    // stmtの初めにwhenNodeがあれば、取得
+    const s0 = stmt.filter((s) => s.type !== "dummy")[0].stmt;
+    const whenNode = s0.type === "when" ? s0.cond : undefined;
+    // 条件を取得できたら、stmtから削除
+    if (whenNode) {
+      stmt.shift();
+    }
     return {
       type: NODE_TYPE.BLOCK,
       body: stmt,
       varList: bs,
       token: tok,
+      when: whenNode,
     };
   }
 
@@ -601,9 +611,9 @@ class Parser {
       }
       this.next();
       this.consume(",");
-      const input = this.parseExpr();
+      const input = this.parsePrimary() as StructNode;
       this.consume(",");
-      const output = this.parseExpr();
+      const output = this.parsePrimary() as StructNode;
       this.consume(")");
       return {
         type: NODE_TYPE.CALL,

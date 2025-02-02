@@ -150,8 +150,22 @@ export type If = {
   constraint?: VarNode;
 } & BaseNode;
 
+// block条件分岐Node
+export type BlockIf = {
+  type: typeof NEW_NODE_TYPE.WHEN;
+  cond: Expr;
+} & BaseNode;
+
+// call
+export type Call = {
+  type: typeof NEW_NODE_TYPE.CALL;
+  module: string;
+  input: Expr;
+  output: Expr;
+} & BaseNode;
+
 // エラー対応にダミーを含む
-export type StmtNode = If | AssignNode | Return | Dummy;
+export type StmtNode = If | BlockIf | AssignNode | Return | Call | Dummy;
 
 // クラスメソッド
 export type Method = {
@@ -168,6 +182,7 @@ export type Class = {
   name: string;
   fieldList: ParamNode[];
   body: MethodNode[];
+  when?: Expr;
 } & BaseNode;
 
 // エラー対応にダミーを含む
@@ -203,6 +218,8 @@ export type Node =
   | AssignNode
   | Return
   | If
+  | Call
+  | BlockIf
   | Method
   | ClassNode
   | Param
@@ -216,6 +233,7 @@ export type Visitor = {
   [NODE_TYPE.VAR]: (node: ast.VarNode) => VarNode;
   //todo: 本来は違うけど、paramのためにvarNode
   [NODE_TYPE.MEMBER]: (node: ast.Member) => VarNode;
+  [NODE_TYPE.VECTOR]: (node: ast.StructNode) => StructNode;
   [NODE_TYPE.CALL_EXPR]: (node: ast.Expr) => Expr;
   [NODE_TYPE.SQRT]: (node: ast.SqrtNode) => SqrtNode;
   [NODE_TYPE.EXP]: (node: ast.ExpNode) => ExpNode;
@@ -223,6 +241,8 @@ export type Visitor = {
   [NODE_TYPE.SELECT]: (node: ast.SelectNode) => SelectNode;
   [NODE_TYPE.ASSIGN]: (node: ast.AssignNode) => AssignNode | Return | If;
   [NODE_TYPE.TEST]: (node: ast.TestNode) => If;
+  [NODE_TYPE.WHEN]: (node: ast.WhenNode) => BlockIf;
+  [NODE_TYPE.CALL]: (node: ast.CallNode) => Call;
   [stmtBlockType]: (node: ast.StmtBlock) => ClassNode;
   [NODE_TYPE.BLOCK]: (node: ast.Block) => ClassNode;
   [NODE_TYPE.PARAM]: (node: ast.ParamNode) => ParamNode;

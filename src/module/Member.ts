@@ -69,7 +69,6 @@ export class Member<T extends string | number | boolean> implements Predicate {
                 if (methodThis.i >= outerThis.l.getLength()) {
                   return Predicate.failure;
                 }
-
                 vm.popChoicePoint();
                 return methodThis.cu1.exec(vm);
               }

@@ -32,8 +32,18 @@ const App: React.FC = () => {
     },
   });
   // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  const [mod, setMod] = useState<any>();
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   const [result, setResult] = useState<any[]>();
   const fileMappingRef = useRef<Map<string, string>>();
+  const [openModal, setOpenModal] = useState(false);
+  const [inputValue, setInputValue] = useState<{
+    [key: string]: {
+      type: string;
+      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      value: any;
+    };
+  }>();
 
   useEffect(() => {
     const moduleFiles = import.meta.glob("./module/**/*.ts", {
@@ -65,7 +75,7 @@ const App: React.FC = () => {
     if (fileMappingRef.current) {
       revokeAllFileMapping(fileMappingRef.current);
     }
-    browserBundle(output.output, "main.ts", {
+    await browserBundle(output.output, "main.ts", {
       files: {
         ...modules,
       },
@@ -78,36 +88,77 @@ const App: React.FC = () => {
         const blobUrl = URL.createObjectURL(blob);
         // dynamic import で読み込む
         // ここで main.ts 内の console.log も呼び出され、結果がコンソールに表示される
-        const mod = await import(/* @vite-ignore */ blobUrl);
+        const m = await import(/* @vite-ignore */ blobUrl);
+        setMod(m);
         // ここで、output.props.input に対応する値の入力を求める
-        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-        const userInput: { [key: string]: any } = {};
         for (const input of output.props.input) {
-          const v = prompt(`${input.name}(${input.type}) = `);
-          if (v) {
-            if (input.type.includes("[]")) {
-              if (input.type.includes("number")) {
-                userInput[`_${input.name}`] = [Number.parseFloat(v)];
-              } else {
-                userInput[`_${input.name}`] = [v];
-              }
-            } else if (input.type === "number") {
-              userInput[`_${input.name}`] = Number.parseFloat(v);
-            } else {
-              userInput[`_${input.name}`] = v;
-            }
-          }
+          const type = input.type;
+          setInputValue((prev) => ({
+            ...prev,
+            [input.name]: {
+              type: type,
+              value: "",
+            },
+          }));
         }
-        const resultValue = mod.main(userInput);
-        setResult(resultValue);
       })
       .catch((e) => {
-        console.error(e);
+        console.error("TSプログラムのバンドルに失敗しました:", e);
       });
+    setOpenModal(true);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+  };
+
+  const handleStopRunning = () => {
+    if (fileMappingRef.current) {
+      revokeAllFileMapping(fileMappingRef.current);
+    }
+    setOutput({
+      output: "",
+      props: {
+        input: [],
+        output: [],
+      },
+    });
+    setInputValue({});
+    setOpenModal(false);
+  };
+
+  const handleStartRunning = async () => {
+    if (!mod) return;
+    if (!inputValue) return;
+
+    setOpenModal(false);
+
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    const userInput: { [key: string]: any } = {};
+    for (const [key, value] of Object.entries(inputValue)) {
+      if (value.type.includes("[]")) {
+        if (value.type.includes("number")) {
+          userInput[`_${key}`] = [Number.parseFloat(value.value)];
+        } else if (value.type.includes("boolean")) {
+          userInput[`_${key}`] = [value.value === "true"];
+        } else {
+          userInput[`_${key}`] = [value.value];
+        }
+      } else if (value.type === "number") {
+        userInput[`_${key}`] = Number.parseFloat(value.value);
+      } else if (value.type === "boolean") {
+        userInput[`_${key}`] = value.value === "true";
+      } else {
+        userInput[`_${key}`] = value.value;
+      }
+    }
+
+    try {
+      const resultValue = mod.main(userInput);
+      setResult(resultValue);
+    } catch (e) {
+      console.error("プログラムの実行に失敗しました:", e);
+    }
   };
 
   return (
@@ -151,11 +202,20 @@ const App: React.FC = () => {
               {result.map((item, idx) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
                 <li key={idx}>
-                  {output.props.output.map((o) => (
-                    <p key={o.name}>
-                      {o.name}({o.type}) = {String(item[o.name])},{" "}
-                    </p>
-                  ))}
+                  {output.props.output.map((o) => {
+                    const name = o.name;
+                    const type = o.type;
+                    // item[name]が数字の配列の場合、小数点以下6桁まで表示
+                    let value = item[o.name];
+                    if (type.includes("number")) {
+                      value = item[o.name].toFixed(6);
+                    }
+                    return (
+                      <p key={name}>
+                        {name}: {type} = {String(value)},{" "}
+                      </p>
+                    );
+                  })}
                 </li>
               ))}
             </ul>
@@ -164,6 +224,51 @@ const App: React.FC = () => {
           )}
         </div>
       </div>
+      {openModal && (
+        <div className="modal">
+          <div className="modal-content">
+            <p>基底属性値の入力</p>
+            {inputValue && (
+              <ul>
+                {Object.entries(inputValue).map(([key, value]) => (
+                  <li key={key}>
+                    <p>
+                      {key}({value.type}) ={" "}
+                      <input
+                        type="text"
+                        value={value.value}
+                        onChange={(e) => {
+                          setInputValue((prev) => ({
+                            ...prev,
+                            [key]: {
+                              type: value.type,
+                              value: e.target.value,
+                            },
+                          }));
+                        }}
+                      />
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="modal-button-wrapper">
+              <button type="button" onClick={handleStopRunning}>
+                中止
+              </button>
+              <button
+                type="button"
+                onClick={handleStartRunning}
+                disabled={Object.values(inputValue || {}).some(
+                  (value) => value.value === ""
+                )}
+              >
+                開始
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

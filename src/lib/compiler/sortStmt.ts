@@ -1,5 +1,5 @@
 import { NODE_TYPE } from "./constant";
-import type { Expr, StmtBlock, StmtNode, VarNode } from "./types/ast";
+import type { Expr, StmtBlock, StmtNode, VarNode, WhenNode } from "./types/ast";
 
 // Helper: Collect variables used in an expression
 const collectVariables = (
@@ -21,7 +21,7 @@ const collectVariables = (
 const classifyStatements = (
   stmt: StmtNode[]
 ): Record<string, StmtBlock[]> | null => {
-  const categories = { assume: [], calc: [], test: [] } as Record<
+  const categories = { assume: [], calc: [], test: [], other: [] } as Record<
     string,
     StmtBlock[]
   >;
@@ -77,6 +77,49 @@ const classifyStatements = (
       const target = vars.find((v) => !v.isInput) ?? vars[0];
       const operand = vars.filter((v) => v !== target);
       categories.test.push({
+        type: "stmt-block",
+        token: s.token,
+        body: [s],
+        phase: "test",
+        target: target,
+        operand: operand,
+      });
+    } else if (innerStmt.type === NODE_TYPE.CALL) {
+      // call
+      const input: VarNode[] = innerStmt.input.member.map((m) => {
+        return {
+          type: NODE_TYPE.VAR,
+          token: m.token,
+          name: (m.value as VarNode).name,
+          isInput: true,
+          valueType: (m.value as VarNode).valueType,
+        };
+      });
+      const output: VarNode[] = innerStmt.output.member.map((m) => {
+        return {
+          type: NODE_TYPE.VAR,
+          token: m.token,
+          name: (m.value as VarNode).name,
+          isInput: true,
+          valueType: (m.value as VarNode).valueType,
+        };
+      });
+      // targetは関係ないので適当
+      const target = output.find((v) => !v.isInput) ?? output[0];
+      const operand = input.concat(output);
+      categories.other.push({
+        type: "stmt-block",
+        token: s.token,
+        body: [s],
+        phase: "calc",
+        target: target,
+        operand: operand,
+      });
+    } else if (innerStmt.type === NODE_TYPE.WHEN) {
+      const vars = collectVariables(innerStmt.cond as Expr);
+      const target = vars.find((v) => !v.isInput) ?? vars[0];
+      const operand = vars.filter((v) => v !== target);
+      categories.other.push({
         type: "stmt-block",
         token: s.token,
         body: [s],
@@ -160,66 +203,97 @@ const mergeBlocks = (
   return Array.from(sorted);
 };
 
-const margeCalcTest = (sorted: StmtBlock[]) => {
+const margeCalcTest = (sorted: StmtBlock[], otherList?: StmtBlock[]) => {
   let i = 0;
-  // まず、testとその前に続くcalcを結合
-  while (i < sorted.length) {
-    const s = sorted[i];
-    if (s.phase !== "test") {
-      i++;
-      continue;
-    }
-    // testの要素を見つけたので、1つずつ前に戻る
-    let j = i - 1;
-    let merged = s;
-    while (j >= 0) {
-      const c = sorted[j];
-      if (c.phase === "calc") {
-        const body = c.body.concat(merged.body);
-        sorted.splice(j + 1, 1);
-        merged = { ...c, body };
-        // 現在の位置(j)で上書き
-        sorted[j] = { ...merged };
-      } else {
-        j++;
-        break;
+  //testが含まれるかどうか
+  if (sorted.filter((s) => s.phase === "test").length !== 0) {
+    while (i < sorted.length) {
+      const s = sorted[i];
+      if (s.phase !== "test") {
+        i++;
+        continue;
       }
-      j--;
+      // testの要素を見つけたので、1つずつ前に戻る
+      let j = i - 1;
+      let merged = s;
+      while (j >= 0) {
+        const c = sorted[j];
+        if (!c) break;
+        if (c.phase === "calc") {
+          const body = c.body.concat(merged.body);
+          sorted.splice(j + 1, 1);
+          merged = { ...c, body };
+          // 現在の位置(j)で上書き
+          sorted[j] = { ...merged };
+        } else {
+          j++;
+          break;
+        }
+        j--;
+      }
+      // 次の要素で結合対象にならないように、結合したphaseをtestに変更
+      sorted[j] = { ...merged, phase: "test" };
+      // sortedの長さが変わった分、インデックスを調整
+      i = j + 1;
     }
-    // 次の要素で結合対象にならないように、結合したphaseをtestに変更
-    sorted[j] = { ...merged, phase: "test" };
-    // sortedの長さが変わった分、インデックスを調整
-    i = j + 1;
+  } else if (sorted.filter((s) => s.phase === "calc").length === 1) {
+    // testがなく、calcが1つだけの場合は、sortedの最後尾に追加
+    const calc = sorted.filter((s) => s.phase === "calc")[0];
+    sorted.splice(sorted.indexOf(calc), 1);
+    sorted.push(calc);
   }
   // 次に、calcが連続する場合は結合
   i = 0;
-  while (i < sorted.length) {
-    const s = sorted[i];
-    if (s.phase !== "calc") {
-      i++;
-      continue;
-    }
-    // calcの要素を見つけたので、1つずつ前に戻る
-    let j = i - 1;
-    let merged = s;
-    while (j >= 0) {
-      const c = sorted[j];
-      if (c.phase === "calc") {
-        const body = c.body.concat(merged.body);
-        sorted.splice(j + 1, 1);
-        merged = { ...c, body };
-        // 現在の位置(j)で上書き
-        sorted[j] = { ...merged };
-      } else {
-        j++;
-        break;
+  if (sorted.filter((s) => s.phase === "calc").length !== 1) {
+    while (i < sorted.length) {
+      const s = sorted[i];
+      if (s.phase !== "calc") {
+        i++;
+        continue;
       }
-      j--;
+      // calcの要素を見つけたので、1つずつ前に戻る
+      let j = i - 1;
+      let merged = s;
+      while (j >= 0) {
+        const c = sorted[j];
+        // cが存在しない場合は終了
+        if (!c) break;
+        if (c.phase === "calc") {
+          const body = c.body.concat(merged.body);
+          sorted.splice(j + 1, 1);
+          merged = { ...c, body };
+          // 現在の位置(j)で上書き
+          sorted[j] = { ...merged };
+        } else {
+          j++;
+          break;
+        }
+        j--;
+      }
+      // 次の要素で結合対象にならないように、結合したphaseをcalcに変更
+      sorted[j] = { ...merged, phase: "calc" };
+      // sortedの長さが変わった分、インデックスを調整
+      i = j + 1;
     }
-    // 次の要素で結合対象にならないように、結合したphaseをcalcに変更
-    sorted[j] = { ...merged, phase: "calc" };
-    // sortedの長さが変わった分、インデックスを調整
-    i = j + 1;
+  } else if (sorted.filter((s) => s.phase === "calc").length === 1) {
+    // calcが1つだけの場合は、sortedの最後尾に追加
+    const calc = sorted.filter((s) => s.phase === "calc")[0];
+    // sorted.splice(sorted.indexOf(calc), 1);
+  }
+  // other
+  if (!otherList) return sorted;
+  for (const other of otherList) {
+    // whenNodeがあれば先頭に追加
+    if (other.body[0].type !== "dummy" && other.body[0].stmt.type === "when") {
+      sorted.unshift(other);
+    }
+    // callNodeがあれば最後尾に追加
+    if (
+      other.body.filter((s) => s.type !== "dummy").slice(-1)[0].stmt.type ===
+      "call"
+    ) {
+      sorted.push(other);
+    }
   }
   return sorted;
 };
@@ -230,6 +304,7 @@ export const sortStmt = (predicates: StmtNode[]): StmtBlock[] => {
   if (!stmtList) throw new Error("No valid statements to process.");
 
   const { assume, calc, test } = stmtList;
+  const other = stmtList.other.length ? stmtList.other : undefined;
 
   const testCalc = test.map((t) =>
     calc.find((c) => c.target.name === t.target.name)
@@ -237,5 +312,5 @@ export const sortStmt = (predicates: StmtNode[]): StmtBlock[] => {
   const otherCalc = calc.filter((c) => !testCalc.includes(c));
 
   const sorted = mergeBlocks(assume, testCalc, otherCalc, test);
-  return margeCalcTest(sorted);
+  return margeCalcTest(sorted, other);
 };
