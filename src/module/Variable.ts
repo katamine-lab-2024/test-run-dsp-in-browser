@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 export class Variable<T extends string | number | boolean> {
   /**
    * `Variable`クラスの値の型
@@ -18,8 +20,12 @@ export class Variable<T extends string | number | boolean> {
    * 値を設定する
    * @param v
    */
-  public setValue(v: T): void {
-    this.value = v;
+  public setValue(v: T | Decimal): void {
+    if (v instanceof Decimal) {
+      this.value = v.toNumber() as T;
+    } else {
+      this.value = v;
+    }
   }
 
   /**
@@ -79,32 +85,58 @@ export class Variable<T extends string | number | boolean> {
     return typeof this.value === "string";
   }
 
-  public add(v: Variable<T>): Variable<T> {
-    if (this.isString() && v.isString()) {
-      return new Variable<T>((this.value + v.value) as T);
+  private toVariable(val: Variable<T> | T): Variable<T> {
+    // もしすでに Variable ならそのまま返す。そうでなければ新しくラップする。
+    if (val instanceof Variable) {
+      return val;
     }
-    return this.performOperation(v, (a, b) => a + b, "addition");
+    return new Variable<T>(val as T);
   }
 
-  public sub(v: Variable<T>): Variable<T> {
-    return this.performOperation(v, (a, b) => a - b, "subtraction");
+  public add(v: Variable<T>): Variable<T> {
+    const operand = this.toVariable(v);
+    if (this.isString() && operand.isString()) {
+      return new Variable<T>((this.value + operand.value) as T);
+    }
+    return this.performOperation(operand, (a, b) => a.plus(b), "addition");
   }
 
-  public mul(v: Variable<T>): Variable<T> {
-    return this.performOperation(v, (a, b) => a * b, "multiplication");
+  public sub(v: Variable<T> | T): Variable<T> {
+    const operand = this.toVariable(v);
+    return this.performOperation(operand, (a, b) => a.minus(b), "subtraction");
   }
 
-  public div(v: Variable<T>): Variable<T> {
-    return this.performOperation(v, (a, b) => a / b, "division");
+  public mul(v: Variable<T> | T): Variable<T> {
+    const operand = this.toVariable(v);
+    return this.performOperation(
+      operand,
+      (a, b) => a.times(b),
+      "multiplication"
+    );
   }
 
-  public mod(v: Variable<T>): Variable<T> {
-    return this.performOperation(v, (a, b) => a % b, "modulo");
+  public div(v: Variable<T> | T): Variable<T> {
+    const operand = this.toVariable(v);
+    return this.performOperation(operand, (a, b) => a.dividedBy(b), "division");
+  }
+
+  public mod(v: Variable<T> | T): Variable<T> {
+    const operand = this.toVariable(v);
+    return this.performOperation(operand, (a, b) => a.mod(b), "modulo");
+  }
+
+  public pow(v: Variable<T> | T): Variable<T> {
+    const operand = this.toVariable(v);
+    return this.performOperation(
+      operand,
+      (a, b) => a.pow(b.toNumber()),
+      "exponentiation"
+    );
   }
 
   private performOperation(
     v: Variable<T>,
-    operation: (a: number, b: number) => number,
+    operation: (a: Decimal, b: Decimal) => Decimal,
     operatorName: string
   ): Variable<T> {
     if (!this.isNotNull() || !v.isNotNull()) {
@@ -112,7 +144,13 @@ export class Variable<T extends string | number | boolean> {
     }
 
     if (this.isNumber() && v.isNumber()) {
-      return new Variable<T>(operation(this.value, v.value) as T);
+      // / この.value と v.value は number と仮定
+      const a = new Decimal(this.value);
+      const b = new Decimal(v.value);
+      const resultDecimal = operation(a, b);
+      // 必要に応じて、Decimalの設定で丸めモードや精度を設定可能です
+      const resultNumber = resultDecimal.toNumber();
+      return new Variable<T>(resultNumber as T);
     }
 
     throw new Error(`Incompatible types for ${operatorName}`);

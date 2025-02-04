@@ -75,6 +75,10 @@ const compile = (
         type:
           v.valueType.type === "array"
             ? `${v.valueType.member[0].type}[]`
+            : v.valueType.type === "object"
+            ? `{${v.valueType.member
+                .map((m, i) => `${i + 1}: ${m.type}`)
+                .join(", ")}}`
             : v.valueType.type,
       })),
     output: varList

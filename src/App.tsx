@@ -144,6 +144,26 @@ const App: React.FC = () => {
         } else {
           userInput[`_${key}`] = [value.value];
         }
+      } else if (value.type.startsWith("{")) {
+        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+        const objValue: { [key: string]: any } = {};
+        // biome-ignore lint/complexity/noForEach: <explanation>
+        value.type
+          .slice(1, -1)
+          .split(",")
+          .forEach((item) => {
+            const [rawKey, rawType] = item.split(":");
+            const keyTrim = rawKey.trim();
+            const typeTrim = rawType.trim();
+            if (typeTrim.includes("number")) {
+              objValue[keyTrim] = Number.parseFloat(value.value[keyTrim]);
+            } else if (typeTrim.includes("boolean")) {
+              objValue[keyTrim] = value.value[keyTrim] === "true";
+            } else {
+              objValue[keyTrim] = value.value[keyTrim];
+            }
+          });
+        userInput[`_${key}`] = objValue;
       } else if (value.type === "number") {
         userInput[`_${key}`] = Number.parseFloat(value.value);
       } else if (value.type === "boolean") {
@@ -205,14 +225,18 @@ const App: React.FC = () => {
                   {output.props.output.map((o) => {
                     const name = o.name;
                     const type = o.type;
-                    // item[name]が数字の配列の場合、小数点以下6桁まで表示
                     let value = item[o.name];
                     if (type.includes("number")) {
-                      value = item[o.name].toFixed(6);
+                      // 小数点以下6桁まで表示
+                      value = String(Number(value).toFixed(6));
+                    } else if (type.includes("object")) {
+                      value = `{${Object.entries(value)
+                        .map(([key, val]) => `${val}`)
+                        .join(", ")}}`;
                     }
                     return (
                       <p key={name}>
-                        {name}: {type} = {String(value)},{" "}
+                        {name}: {type} = {value},{" "}
                       </p>
                     );
                   })}
@@ -232,9 +256,84 @@ const App: React.FC = () => {
               <ul>
                 {Object.entries(inputValue).map(([key, value]) => (
                   <li key={key}>
-                    <p>
-                      {key}({value.type}) ={" "}
-                      <input
+                    <div>
+                      {key}({value.type}) = {/* value.typeで場合わけ */}
+                      {value.type.includes("[]") ? (
+                        <input
+                          type="text"
+                          value={value.value}
+                          onChange={(e) => {
+                            setInputValue((prev) => ({
+                              ...prev,
+                              [key]: {
+                                type: value.type,
+                                value: e.target.value,
+                              },
+                            }));
+                          }}
+                        />
+                      ) : value.type.startsWith("{") ? (
+                        value.type
+                          .slice(1, -1)
+                          .split(",")
+                          .map((item) => {
+                            const [rawKey, rawType] = item.split(":");
+                            const keyTrim = rawKey.trim();
+                            const typeTrim = rawType.trim();
+                            return (
+                              <div key={keyTrim}>
+                                {keyTrim}({typeTrim}):{" "}
+                                <input
+                                  type="text"
+                                  value={value.value[keyTrim] ?? ""}
+                                  onChange={(e) => {
+                                    setInputValue((prev) => ({
+                                      ...prev,
+                                      [key]: {
+                                        type: value.type,
+                                        value: {
+                                          ...value.value,
+                                          [keyTrim]: e.target.value,
+                                        },
+                                      },
+                                    }));
+                                  }}
+                                />
+                              </div>
+                            );
+                          })
+                      ) : value.type === "boolean" ? (
+                        <select
+                          value={value.value}
+                          onChange={(e) => {
+                            setInputValue((prev) => ({
+                              ...prev,
+                              [key]: {
+                                type: value.type,
+                                value: e.target.value,
+                              },
+                            }));
+                          }}
+                        >
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={value.value}
+                          onChange={(e) => {
+                            setInputValue((prev) => ({
+                              ...prev,
+                              [key]: {
+                                type: value.type,
+                                value: e.target.value,
+                              },
+                            }));
+                          }}
+                        />
+                      )}
+                      {/* <input
                         type="text"
                         value={value.value}
                         onChange={(e) => {
@@ -246,8 +345,8 @@ const App: React.FC = () => {
                             },
                           }));
                         }}
-                      />
-                    </p>
+                      /> */}
+                    </div>
                   </li>
                 ))}
               </ul>

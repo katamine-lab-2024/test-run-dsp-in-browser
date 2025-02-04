@@ -25,6 +25,7 @@ export type SimpleType = {
     | typeof SIMPLE_TYPE.REAL
     | typeof SIMPLE_TYPE.BOOL
     | typeof SIMPLE_TYPE.ATOM;
+  num?: string;
 } & BaseType;
 
 // 構造変数を表す型

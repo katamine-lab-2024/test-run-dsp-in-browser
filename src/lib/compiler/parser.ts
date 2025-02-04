@@ -2,7 +2,6 @@ import type {
   AssignNode,
   BlockNode,
   BuildInNode,
-  CalcNode,
   Expr,
   Member,
   ModuleNode,
@@ -23,7 +22,7 @@ import {
   STRUCT_TYPE,
   TOKEN_TYPE,
 } from "./constant";
-import type { Type, TypeKind } from "./types/type";
+import type { SimpleType, Type, TypeKind } from "./types/type";
 
 // 構文解析の結果
 type ParseResult = {
@@ -225,7 +224,10 @@ class Parser {
       a: SIMPLE_TYPE.ATOM,
     };
     for (const t of Object.values(SIMPLE_TYPE)) {
-      if (this.isCurrent(t)) return t;
+      if (this.isCurrent(t)) {
+        // r*2
+        return t;
+      }
     }
     for (const [k, v] of Object.entries(abbreviationMap)) {
       if (this.isCurrent(k)) return v;
@@ -240,6 +242,16 @@ class Parser {
   parseType(): Type {
     const tok = this.peek();
     const s = this.isSimpleTypeName();
+    // `r*2`のような型
+    if (s && this.isCurrent("*")) {
+      this.next();
+      const num = this.consume(TOKEN_TYPE.NUMBER).value;
+      return {
+        type: s,
+        token: tok,
+        num: num,
+      };
+    }
     // 単純変数
     if (s) {
       this.next();
@@ -275,11 +287,21 @@ class Parser {
       this.next();
       const member: Type[] = [];
       if (
-        this.isSimpleTypeName() ||
-        this.isCurrent("[") ||
-        this.isCurrent("{")
+        // this.isSimpleTypeName() ||
+        // this.isCurrent("[") ||
+        // this.isCurrent("{")
+        !this.isCurrent("}")
       ) {
-        member.push(this.parseType());
+        const pt = this.parseType();
+        const sNum = (pt as SimpleType).num;
+        // `r*2`のような型は、{r, r}に変換
+        if (sNum) {
+          for (let i = 0; i < Number.parseInt(sNum); i++) {
+            member.push(pt);
+          }
+        } else {
+          member.push(pt);
+        }
         while (this.isCurrent(",")) {
           this.next();
           member.push(this.parseType());
@@ -633,7 +655,7 @@ class Parser {
    */
   parseAssign(): AssignNode {
     const tok = this.peek();
-    const expr = this.parsePrimary();
+    const expr = this.parseLHS();
     this.consume("=");
     const assign: AssignNode = {
       type: NODE_TYPE.ASSIGN,
@@ -642,6 +664,26 @@ class Parser {
       token: tok,
     };
     return assign;
+  }
+
+  /**
+   * 左辺値としてのパースで、分割代入パターン（{ ... }）の場合は
+   * 個々の識別子と型注釈を解析する。
+   */
+  parseLHS(): Expr {
+    if (this.isCurrent("{")) {
+      const startToken = this.consume("{");
+      // 分割代入パターンの解析（後述）
+      const members = this.parseDestructurePattern();
+      return {
+        type: NODE_TYPE.VECTOR,
+        member: members,
+        token: startToken,
+        // 分割代入であることを示すフラグ（AST定義の拡張が必要）
+        isDestructuring: true,
+      };
+    }
+    return this.parsePrimary();
   }
 
   /**
@@ -1105,6 +1147,7 @@ class Parser {
         type: NODE_TYPE.VECTOR,
         member: member,
         token: tok,
+        isDestructuring: false,
       };
     }
     switch (this.peek().type) {
@@ -1214,6 +1257,7 @@ class Parser {
           isInput: false,
         },
         token: tok,
+        isDestructuring: false,
       };
     }
     const node = this.parseUnary();
@@ -1221,8 +1265,166 @@ class Parser {
       type: NODE_TYPE.MEMBER,
       token: tok,
       value: node,
+      isDestructuring: false,
     };
   }
+
+  /**
+   * 分割代入パターン内の各メンバーを解析する関数
+   *
+   * 対応する構文例:
+   *   { A, B } : { real, integer }    // 識別子の場合。inline 型注釈がなければグループ注釈を後で適用
+   *   { A: real, B: integer }           // 各識別子に個別の型注釈がある場合
+   *   { 1, 2 }                         // 識別子でない（リテラルなど）は式として扱う
+   */
+  private parseDestructureMemberInfo(): DestructureMemberInfo {
+    const tok = this.peek();
+    // 識別子の場合
+    if (this.isCurrent(TOKEN_TYPE.IDENT_VAR)) {
+      this.next(); // 識別子トークンを消費
+      let inlineType: Type | undefined = undefined;
+      if (this.isCurrent(":")) {
+        this.consume(":");
+        inlineType = this.parseType();
+      }
+      return {
+        token: tok,
+        inlineType: inlineType,
+        isIdentifier: true,
+      };
+    }
+    // 識別子でない場合は、通常の式として解析
+    const node = this.parseUnary();
+    return {
+      token: tok,
+      isIdentifier: false,
+      node: node,
+    };
+  }
+
+  /**
+   * 分割代入パターンを解析する。
+   * 対応する構文例:
+   *   { A, B } : { real, integer }
+   *   { A: real, B: integer }
+   *   { 1, 2 }
+   *
+   * 個々に型注釈がない場合は、コロンの後のグループ型注釈を利用する。
+   * なお、識別子の場合は、inline 型注釈がなければグループ型注釈の適用時に、
+   * まだ pushVar されていなければ pushVar を呼んで新規登録します。
+   */
+  private parseDestructurePattern(): Member[] {
+    const memberInfos: DestructureMemberInfo[] = [];
+
+    // 中括弧内の各メンバーを解析する
+    while (!this.isCurrent("}")) {
+      const info = this.parseDestructureMemberInfo();
+      memberInfos.push(info);
+      if (this.isCurrent(",")) {
+        this.next(); // カンマを消費して次のメンバーへ
+      } else {
+        break;
+      }
+    }
+    this.consume("}"); // 中括弧の閉じを消費
+
+    // グループ型注釈の解析（あれば）
+    let groupTypes: Type[] | null = null;
+    if (this.isCurrent(":")) {
+      this.consume(":");
+      if (this.isCurrent("{")) {
+        this.consume("{");
+        groupTypes = [];
+        if (!this.isCurrent("}")) {
+          groupTypes.push(this.parseType());
+          while (this.isCurrent(",")) {
+            this.next();
+            groupTypes.push(this.parseType());
+          }
+        }
+        this.consume("}");
+      } else {
+        const tok = this.peek();
+        this.errorList.push({
+          message: `Expected '{' after ':' for group type annotation, got ${JSON.stringify(
+            tok.value
+          )}.`,
+          position: tok.position,
+        });
+      }
+    }
+
+    // 最終的なメンバーリストを生成する
+    const members: Member[] = [];
+    for (let i = 0; i < memberInfos.length; i++) {
+      const info = memberInfos[i];
+      let finalType: Type | undefined = info.inlineType;
+      if (!finalType && groupTypes) {
+        if (groupTypes.length !== memberInfos.length) {
+          this.errorList.push({
+            message: `Mismatch between number of members (${memberInfos.length}) and group types (${groupTypes.length}).`,
+            position: memberInfos[0].token.position,
+          });
+        } else {
+          finalType = groupTypes[i];
+        }
+      }
+      // 識別子の場合：新規なら pushVar を呼び、既存なら findVar の結果を利用する
+      if (info.isIdentifier) {
+        // 既に定義済みの変数を探す
+        const existing = this.findVar(info.token);
+        let varNode: VarNode;
+        if (existing) {
+          varNode = existing;
+          // もし型がまだ dummy になっている（＝inline型も設定されていなかった）場合は、
+          // グループ型注釈で補正する
+          if (varNode.valueType.type === "dummy" && finalType) {
+            // ※ここでは、再登録する形ではなく、型フィールドを更新していますが、
+            // 必要に応じて pushVar を再度呼び出す実装に変更してください。
+            varNode.valueType = finalType;
+          }
+        } else {
+          if (!finalType) {
+            this.errorList.push({
+              message: `Missing type annotation for variable ${info.token.value} in destructuring pattern.`,
+              position: info.token.position,
+            });
+            finalType = { type: "dummy", token: info.token };
+          }
+          // 新規の場合はここで pushVar を呼び出して登録する
+          varNode = this.pushVar(info.token, finalType, /*isBlock*/ true);
+        }
+        members.push({
+          type: NODE_TYPE.MEMBER,
+          token: info.token,
+          value: varNode,
+          isDestructuring: true,
+        });
+      } else {
+        // 識別子でない場合は、そのまま解析結果（リテラルや式）をメンバーとする
+        members.push({
+          type: NODE_TYPE.MEMBER,
+          token: info.token,
+          // biome-ignore lint/style/noNonNullAssertion: <explanation>
+          value: info.node!,
+          isDestructuring: false,
+        });
+      }
+    }
+
+    return members;
+  }
+}
+
+// 中間情報用の型（必要に応じてファイル上部に定義してください）
+interface DestructureMemberInfo {
+  token: Token;
+  // inline で型注釈があれば（例: "A: real" の real 部分）
+  inlineType?: Type;
+  // 識別子の場合は true。リテラルの場合は false（その場合 node に式の AST が入る）
+  isIdentifier: boolean;
+  // 識別子でない場合の式ノード（識別子の場合は未使用）
+  node?: Expr;
 }
 
 /**

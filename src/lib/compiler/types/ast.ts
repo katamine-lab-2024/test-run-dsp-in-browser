@@ -45,12 +45,14 @@ export type ListNode = {
 export type StructNode = {
   type: typeof NODE_TYPE.VECTOR;
   member: Member[];
+  isDestructuring: boolean;
 } & BaseNode;
 
 // ベクトルのメンバー
 export type Member = {
   type: typeof NODE_TYPE.MEMBER;
   value: Expr | VarNode;
+  isDestructuring: boolean;
 } & BaseNode;
 
 // Primary

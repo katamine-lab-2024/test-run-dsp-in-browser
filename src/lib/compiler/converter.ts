@@ -93,12 +93,18 @@ class ASTConverter {
       [NODE_TYPE.VECTOR]: (node: ast.StructNode) => {
         const member: newAst.Member[] = node.member.map((m) => {
           const v = this.visitNode(m, visitor) as newAst.VarNode | newAst.Expr;
-          return { type: NEW_NODE_TYPE.MEMBER, token: m.token, value: v };
+          return {
+            type: NEW_NODE_TYPE.MEMBER,
+            token: m.token,
+            value: v,
+            isDestructuring: m.isDestructuring,
+          };
         });
         return {
           type: NEW_NODE_TYPE.OBJECT,
           token: node.token,
           member: member,
+          isDestructuring: node.isDestructuring,
         };
       },
 
@@ -107,6 +113,7 @@ class ASTConverter {
           const lhs = this.visitNode(node.lhs, visitor) as newAst.Expr;
           if ("rhs" in node) {
             const rhs = this.visitNode(node.rhs, visitor) as newAst.Expr;
+
             return {
               type: NODE_TYPE.CALL_EXPR,
               token: node.token,

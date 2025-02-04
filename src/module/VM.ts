@@ -77,4 +77,16 @@ export class VM {
     this.popChoicePoint();
     return this.call(cp);
   }
+
+  // 例：VMクラスに追加するメソッド（非常に簡易な例）
+  public jtry(first: Predicate, second: Predicate): Predicate {
+    // 「first を実行する前に、second を choice point に積む」
+    this.setChoicePoint(second);
+    return first;
+  }
+
+  public trust(next: Predicate): Predicate {
+    // 単に next を返す（choice point から次の候補を呼び出すとき用）
+    return next;
+  }
 }

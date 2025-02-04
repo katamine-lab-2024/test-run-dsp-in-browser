@@ -3,6 +3,7 @@ import type {
   BuildInNode,
   Class,
   Expr,
+  Primary,
   Program,
   StmtNode,
   StructNode,
@@ -41,8 +42,10 @@ class CodeGenerator {
         return m.type;
       });
       return isDecl
-        ? `{${innerMemberType.map((m, i) => `${i}: ${m};`).join(" ")}}`
-        : `List<{${innerMemberType.map((m, i) => m).join(" | ")}>`;
+        ? `{${innerMemberType.map((m, i) => `${i + 1}: ${m};`).join(" ")}}`
+        : `VObject<{${innerMemberType
+            .map((m, i) => `${i + 1}: ${m};`)
+            .join(" ")}}>`;
     }
     return isDecl ? f.type : `Variable<${f.type}>`;
   };
@@ -56,10 +59,12 @@ class CodeGenerator {
 
   private addImports(): void {
     const imt = [
+      'import Decimal from "decimal.js";',
       'import { type IC, createInnerClass } from "./util";',
       'import { Predicate } from "./Predicate";',
       'import { Variable } from "./Variable";',
       'import { List } from "./List";',
+      'import { VObject } from "./Object";',
       'import { VM } from "./VM";',
       'import { For } from "./For";',
       'import { Member } from "./Member";',
@@ -108,6 +113,10 @@ class CodeGenerator {
               ? "0"
               : f.valueType.type === "string"
               ? '""'
+              : f.valueType.type === "object"
+              ? `{${f.valueType.member
+                  .map((m, i) => `${i + 1}: ${m.type === "number" ? 0 : '""'}`)
+                  .join(", ")}}`
               : ""
           });`
       ),
@@ -199,60 +208,37 @@ class CodeGenerator {
         "",
       ];
     } else {
-      // whenで条件分岐
-      const anySuccess = [];
-      const newP = [];
-      const conds = [];
-      for (const block of blockList) {
+      // blockのクラスをインスタンス化
+      const methodCandidateNames = blockList.map(
+        (block) => `method_${block.name}`
+      );
+      const methodCandidates = blockList.map((block) => {
         if (block.when) {
-          let cond = this.exprGen(block.when, false);
-          if (cond.includes("outerThis")) {
-            cond = cond.replaceAll("outerThis", "this");
-          }
-          conds.push(cond);
-          newP.push(
-            `    const method_${block.name} = new this.Method_${block.name}();`
-          );
-          anySuccess.push(
-            `    if (${cond}) {
-      return method_${block.name}.exec(vm);
-    }\n`
-          );
+          let condStr = this.exprGen(block.when, {
+            isVarRef: false,
+            isString: false,
+          });
+          if (condStr.includes("outerThis"))
+            condStr = condStr.replaceAll("outerThis", "this");
+          return `    const method_${block.name} = (function() {
+            if (!(${condStr})) {
+               return Predicate.failure;
+            }
+            return new this.Method_${block.name}();
+          }).call(this)`;
         }
+        return `    const method_${block.name} = new this.Method_${block.name}();`;
+      });
+      // methodを連結
+      let chain = methodCandidateNames[methodCandidateNames.length - 1];
+      for (let i = methodCandidateNames.length - 2; i >= 0; i--) {
+        chain = `vm.jtry(${methodCandidateNames[i]}, ${chain})`;
       }
-      // 全てのcondが失敗するか
-      const allFail = [
-        "    if(",
-        ...conds.map((c) => `!(${c})`).join("\n      && "),
-        ") {\n",
-        "      return Predicate.failure;\n",
-        "    }\n",
-        "",
-      ];
-      // 全てのcondが成功するか
-      const allSuccess = [
-        "    if(",
-        ...conds.map((c) => `(${c})`).join("\n      && "),
-        ") {\n",
-        // blockListの先頭以外をchoicePointに追加
-        blockList
-          .filter((b) => b !== blockList[0])
-          .map((b) => {
-            return `      vm.setChoicePoint(method_${b.name});\n`;
-          }),
-        // blockListの先頭を実行
-        `      return method_${blockList[0].name}.exec(vm);\n`,
-        "    }",
-        "\n",
-      ];
       exec = [
         "  public exec(vm: VM): Predicate {",
-        newP.join("\n"),
+        methodCandidates.join("\n"),
         "",
-        allFail.join(""),
-        allSuccess.join(""),
-        anySuccess.join(""),
-        // "    return Predicate.failure;",
+        `return ${chain};`,
         "  }",
         "",
       ];
@@ -390,7 +376,10 @@ class CodeGenerator {
         return "when";
       }
       case "if": {
-        const cond = this.exprGen(stmt.cond, false);
+        const cond = this.exprGen(stmt.cond, {
+          isVarRef: false,
+          isString: false,
+        });
         if (cond.includes("constraint")) {
           return `                return ${cont};`;
         }
@@ -402,6 +391,29 @@ class CodeGenerator {
         ].join("\n");
       }
       case "assign": {
+        if (stmt.lhs.type === "object" && stmt.lhs.isDestructuring) {
+          // 右辺の生成コードを取得（例: "outerThis.R" となる想定）
+          const rhsExpr = this.primaryGen(stmt.rhs as Primary, {
+            isVarRef: true,
+          });
+          // 右辺の Variable の getValue() を利用して、配列（またはベクトル）として扱うと仮定
+          const assignments: string[] = [];
+          for (let i = 0; i < stmt.lhs.member.length; i++) {
+            const member = stmt.lhs.member[i];
+            const ths =
+              (member.value as VarNode).isInParam === true
+                ? "outerThis"
+                : "methodThis";
+            // 各変数の名前は member.value.name として取得できると仮定
+            // 右辺から i 番目の要素を取り出すには、getValue()[i] とします。
+            assignments.push(
+              `                ${ths}.${
+                (member.value as VarNode).name
+              }.setValue(${rhsExpr}.getByKey(${i + 1}));`
+            );
+          }
+          return assignments.join("\n");
+        }
         const ths = (stmt.lhs as VarNode).isInParam
           ? "outerThis"
           : "methodThis";
@@ -431,7 +443,10 @@ class CodeGenerator {
             stmt.module.charAt(0).toUpperCase() + stmt.module.slice(1)
           }Class (`,
           vList
-            .map((v) => `                  ${this.primaryGen(v, true)},`)
+            .map(
+              (v) =>
+                `                  ${this.primaryGen(v, { isVarRef: true })},`
+            )
             .join("\n"),
           `                  ${cont}`,
           "                );",
@@ -455,13 +470,15 @@ class CodeGenerator {
       case "for": {
         return [
           "new For(",
-          buildIn.target ? this.primaryGen(buildIn.target, true) : "",
+          buildIn.target
+            ? this.primaryGen(buildIn.target, { isVarRef: true })
+            : "",
           ", ",
-          ...this.exprGen(buildIn.from, true),
+          ...this.exprGen(buildIn.from, { isVarRef: true }),
           ", ",
-          ...this.exprGen(buildIn.to, true),
+          ...this.exprGen(buildIn.to, { isVarRef: true }),
           ", ",
-          ...this.exprGen(buildIn.inc, true),
+          ...this.exprGen(buildIn.inc, { isVarRef: true }),
           ", ",
           cont,
           ")",
@@ -470,131 +487,163 @@ class CodeGenerator {
       case "select": {
         return [
           "new Member(",
-          buildIn.target ? this.primaryGen(buildIn.target, true) : "",
+          buildIn.target
+            ? this.primaryGen(buildIn.target, { isVarRef: true })
+            : "",
           ", ",
-          ...this.exprGen(buildIn.list, true),
+          ...this.exprGen(buildIn.list, { isVarRef: true }),
           ", ",
           cont,
           ")",
         ].join("");
       }
       default:
-        return this.exprGen(buildIn, false);
+        return this.exprGen(buildIn, { isVarRef: false, isString: false });
     }
   }
 
-  private exprGen(expr: Expr, isVarRef: boolean): string {
+  private _wrapCalc(expr: Expr, primaryOP: ExprGenOptions): string {
+    const exprStr = this.exprGen(expr, primaryOP);
+    const wrapped =
+      expr.type === "call-expr"
+        ? `(${exprStr})`
+        : expr.type === "num"
+        ? `new Decimal('${exprStr}')`
+        : expr.type === "var"
+        ? `new Decimal(${exprStr})`
+        : exprStr;
+    return wrapped;
+  }
+
+  private exprGen(expr: Expr, primaryOP: ExprGenOptions): string {
     if (expr.type === "call-expr") {
-      const lhs = this.exprGen(expr.lhs, false);
-      const lhsStr = expr.lhs.type === "call-expr" ? `(${lhs})` : lhs;
+      const l = this.exprGen(expr.lhs, primaryOP);
+      const lhsStr = expr.lhs.type === "call-expr" ? `(${l})` : l;
+
+      const lhsStrForCalc = this._wrapCalc(expr.lhs, primaryOP);
       switch (expr.callee) {
         case "add": {
-          const rhs = this.exprGen(expr.rhs, false);
-          const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
-          return `${lhsStr} + ${rhsStr}`;
+          const rhsStr = this._wrapCalc(expr.rhs, primaryOP);
+          return `${lhsStrForCalc}.plus(${rhsStr})`;
         }
         case "sub": {
-          const rhs = this.exprGen(expr.rhs, false);
-          const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
-          return `${lhsStr} - ${rhsStr}`;
+          const rhsStr = this._wrapCalc(expr.rhs, primaryOP);
+          return `${lhsStrForCalc}.minus(${rhsStr})`;
         }
         case "mul": {
-          const rhs = this.exprGen(expr.rhs, false);
-          const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
-          return `${lhsStr} * ${rhsStr}`;
+          const rhsStr = this._wrapCalc(expr.rhs, primaryOP);
+          return `${lhsStrForCalc}.times(${rhsStr})`;
         }
         case "div": {
-          const rhs = this.exprGen(expr.rhs, false);
-          const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
-          return `${lhsStr} / ${rhsStr}`;
+          const rhsStr = this._wrapCalc(expr.rhs, primaryOP);
+          return `${lhsStrForCalc}.dividedBy(${rhsStr})`;
         }
         case "mod": {
-          const rhs = this.exprGen(expr.rhs, false);
-          const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
-          return `${lhsStr} % ${rhsStr}`;
+          const rhsStr = this._wrapCalc(expr.rhs, primaryOP);
+          return `${lhsStrForCalc}.mod(${rhsStr})`;
         }
         case "pow": {
-          const rhs = this.exprGen(expr.rhs, false);
-          const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
-          return `${lhsStr} ** ${rhsStr}`;
+          const rhsStr = this._wrapCalc(expr.rhs, primaryOP);
+          return `${lhsStrForCalc}.pow(${rhsStr})`;
         }
         case "EQ": {
-          const rhs = this.exprGen(expr.rhs, false);
+          const rhs = this.exprGen(expr.rhs, primaryOP);
           const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
           return `${lhsStr} === ${rhsStr}`;
         }
         case "NE": {
-          const rhs = this.exprGen(expr.rhs, false);
+          const rhs = this.exprGen(expr.rhs, primaryOP);
           const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
           return `${lhsStr} !== ${rhsStr}`;
         }
         case "LT": {
-          const rhs = this.exprGen(expr.rhs, false);
+          const rhs = this.exprGen(expr.rhs, primaryOP);
           const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
           return `${lhsStr} < ${rhsStr}`;
         }
         case "LE": {
-          const rhs = this.exprGen(expr.rhs, false);
+          const rhs = this.exprGen(expr.rhs, primaryOP);
           const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
           return `${lhsStr} <= ${rhsStr}`;
         }
         case "and": {
-          const rhs = this.exprGen(expr.rhs, false);
+          const rhs = this.exprGen(expr.rhs, primaryOP);
           const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
           return `${lhsStr} && ${rhsStr}`;
         }
         case "or": {
-          const rhs = this.exprGen(expr.rhs, false);
+          const rhs = this.exprGen(expr.rhs, primaryOP);
           const rhsStr = expr.rhs.type === "call-expr" ? `(${rhs})` : rhs;
           return `${lhsStr} || ${rhsStr}`;
         }
         case "not":
           return `!${lhsStr}`;
         case "neg":
-          return `-${lhsStr}`;
+          return `new Decimal('${lhsStr}').neg()`;
         default:
           return "";
       }
     }
-    return this.primaryGen(expr, isVarRef);
+    return this.primaryGen(expr, primaryOP);
   }
 
-  private primaryGen(primary: Expr, isVarRef: boolean): string {
+  private primaryGen(primary: Expr, option: ExprGenOptions): string {
     switch (primary.type) {
       case "num":
-        return primary.token.value;
+        return `${primary.token.value}`;
       case "string":
-        return primary.token.value;
+        return `'${primary.token.value}'`;
       case "boolean":
         return primary.token.value;
       case "var": {
         const ths = primary.isInParam ? "outerThis" : "methodThis";
-        // const type = primary.valueType;
-        const getMethod = "getValue";
-        // if (type.type === "number") {
-        //   getMethod = "getNumberValue";
-        // } else if (type.type === "string") {
-        //   getMethod = "getStringValue";
-        // }
-        return isVarRef
-          ? `${ths}.${primary.name}`
-          : `${ths}.${primary.name}.${getMethod}()`;
+        let value = "";
+        if (option.isVarRef) {
+          value = `${ths}.${primary.name}`;
+        } else {
+          value = option.isString
+            ? `${ths}.${primary.name}.toString()`
+            : `${ths}.${primary.name}.getValue()`;
+        }
+        return value;
       }
       case "sqrt": {
-        return ["Math.sqrt(", ...this.exprGen(primary.expr, false), ")"].join(
-          ""
-        );
+        return [
+          "Decimal.sqrt(",
+          ...this.exprGen(primary.expr, option),
+          ")",
+        ].join("");
       }
       case "exp": {
-        return ["Math.exp(", ...this.exprGen(primary.expr, false), ")"].join(
-          ""
-        );
+        return [
+          "Decimal.exp(",
+          ...this.exprGen(primary.expr, option),
+          ")",
+        ].join("");
+      }
+      case "call-expr": {
+        //?なくてもできたのなぜ？
+        return this.exprGen(primary, option);
+      }
+      case "object": {
+        const member = primary.member.map((m, i) => {
+          const v = this.primaryGen(m.value, {
+            isVarRef: false,
+            isString: false,
+          });
+          return `  ${i + 1}: ${v},`;
+        });
+        return ["{", ...member, "}"].join("\n");
       }
       default:
         return "";
     }
   }
 }
+
+type ExprGenOptions =
+  | { isVarRef: true } // この場合、isVarRefは不要
+  | { isVarRef: false; isString: boolean };
 
 export const codeGen = (prog: Program) => {
   const generator = new CodeGenerator(prog);

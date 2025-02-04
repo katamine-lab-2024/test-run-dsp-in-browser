@@ -46,12 +46,14 @@ export type ListNode = {
 export type StructNode = {
   type: typeof NEW_NODE_TYPE.OBJECT;
   member: Member[];
+  isDestructuring: boolean;
 } & BaseNode;
 
 // ベクトルのメンバー
 export type Member = {
   type: typeof NEW_NODE_TYPE.MEMBER;
   value: Expr | VarNode;
+  isDestructuring: boolean;
 } & BaseNode;
 
 // Primary
