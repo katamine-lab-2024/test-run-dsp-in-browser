@@ -42,12 +42,18 @@ export const NODE_TYPE = {
 
   // 制御構文
   WHEN: "when",
+  CASE: "case",
+  CASE_PATTERN: "case-pattern",
   TEST: "test",
   FOR: "for",
   SELECT: "select",
   CALL: "call",
   SQRT: "sqrt",
   EXP: "exp",
+  // method
+  LENGTH: "length",
+  NTH: "nth",
+  LIST_SUM: "list-sum",
 } as const;
 
 // 演算子の種類
@@ -136,6 +142,11 @@ export const NEW_NODE_TYPE = {
   FOR: "for",
   SELECT: "select",
   SQRT: "sqrt",
+  CASE: "case",
   EXP: "exp",
   CALL: "call",
+  // method
+  LENGTH: "length",
+  NTH: "nth",
+  LIST_SUM: "list-sum",
 } as const;

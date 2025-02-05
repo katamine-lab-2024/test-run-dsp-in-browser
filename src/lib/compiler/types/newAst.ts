@@ -96,7 +96,7 @@ export type BinaryNode = {
 export type Expr = Primary | UnaryNode | BinaryNode;
 
 // 計算
-export type Calc = SqrtNode | ExpNode;
+export type Calc = SqrtNode | ExpNode | LengthNode | NthNode | ListSumNode;
 
 // 仮定・生成
 // for
@@ -114,6 +114,25 @@ export type SelectNode = {
   list: Primary;
 } & BaseNode;
 
+// list:length
+export type LengthNode = {
+  type: typeof NEW_NODE_TYPE.LENGTH;
+  list: Primary;
+} & BaseNode;
+
+// list:nth
+export type NthNode = {
+  type: typeof NEW_NODE_TYPE.NTH;
+  index: Primary;
+  list: Primary;
+} & BaseNode;
+
+// list:sum
+export type ListSumNode = {
+  type: typeof NEW_NODE_TYPE.LIST_SUM;
+  list: Primary;
+} & BaseNode;
+
 // 数値演算
 // 平方根: sqrt
 export type SqrtNode = {
@@ -128,7 +147,7 @@ export type ExpNode = {
 } & BaseNode;
 
 // 組み込みモジュール
-export type BuildInNode = ForNode | SelectNode | Expr;
+export type BuildInNode = ForNode | SelectNode | Expr | CaseIf;
 
 // 代入文
 export type AssignNode = {
@@ -147,7 +166,7 @@ export type Return = {
 export type If = {
   type: typeof NEW_NODE_TYPE.IF;
   cond: Expr;
-  then?: StmtNode[];
+  thn?: StmtNode[] | Expr;
   else?: If | StmtNode[];
   constraint?: VarNode;
 } & BaseNode;
@@ -156,6 +175,18 @@ export type If = {
 export type BlockIf = {
   type: typeof NEW_NODE_TYPE.WHEN;
   cond: Expr;
+} & BaseNode;
+
+// caseのif
+export type CaseIf = {
+  type: typeof NEW_NODE_TYPE.CASE;
+  cond: Expr;
+  thn: Expr;
+  else?: {
+    cond: Expr;
+    thn: Expr;
+  }[];
+  target?: Primary;
 } & BaseNode;
 
 // call
@@ -220,6 +251,10 @@ export type Node =
   | AssignNode
   | Return
   | If
+  | LengthNode
+  | NthNode
+  | ListSumNode
+  | CaseIf
   | Call
   | BlockIf
   | Method
@@ -232,19 +267,27 @@ const stmtBlockType = "stmt-block" as const;
 // Visitorの型を定義
 export type Visitor = {
   [NODE_TYPE.NUM]: (node: ast.LiteralNode) => LiteralNode;
+  [NODE_TYPE.BOOL]: (node: ast.LiteralNode) => LiteralNode;
   [NODE_TYPE.VAR]: (node: ast.VarNode) => VarNode;
   //todo: 本来は違うけど、paramのためにvarNode
   [NODE_TYPE.MEMBER]: (node: ast.Member) => VarNode;
   [NODE_TYPE.VECTOR]: (node: ast.StructNode) => StructNode;
+  [NODE_TYPE.LIST]: (node: ast.ListNode) => ListNode;
   [NODE_TYPE.CALL_EXPR]: (node: ast.Expr) => Expr;
+  [NODE_TYPE.LENGTH]: (node: ast.LengthNode) => LengthNode;
+  [NODE_TYPE.NTH]: (node: ast.NthNode) => NthNode;
+  [NODE_TYPE.LIST_SUM]: (node: ast.ListSumNode) => ListSumNode;
   [NODE_TYPE.SQRT]: (node: ast.SqrtNode) => SqrtNode;
   [NODE_TYPE.EXP]: (node: ast.ExpNode) => ExpNode;
   [NODE_TYPE.FOR]: (node: ast.ForNode) => ForNode;
   [NODE_TYPE.SELECT]: (node: ast.SelectNode) => SelectNode;
-  [NODE_TYPE.ASSIGN]: (node: ast.AssignNode) => AssignNode | Return | If;
+  [NODE_TYPE.ASSIGN]: (
+    node: ast.AssignNode
+  ) => AssignNode | Return | If | CaseIf;
   [NODE_TYPE.TEST]: (node: ast.TestNode) => If;
   [NODE_TYPE.WHEN]: (node: ast.WhenNode) => BlockIf;
   [NODE_TYPE.CALL]: (node: ast.CallNode) => Call;
+  [NODE_TYPE.CASE]: (node: ast.CaseNode) => CaseIf;
   [stmtBlockType]: (node: ast.StmtBlock) => ClassNode;
   [NODE_TYPE.BLOCK]: (node: ast.Block) => ClassNode;
   [NODE_TYPE.PARAM]: (node: ast.ParamNode) => ParamNode;

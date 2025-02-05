@@ -31,7 +31,14 @@ export class List<T extends string | number | boolean> {
    * @returns 指定したインデックスの要素
    */
   public getByIndex(index: number): Variable<T> {
-    return this.list[index];
+    return this.list[index - 1];
+  }
+
+  /**
+   * リストの要素の和を取得する
+   */
+  public getSum(): number {
+    return this.list.reduce((acc, cur) => acc + cur.getNumberValue(), 0);
   }
 
   /**

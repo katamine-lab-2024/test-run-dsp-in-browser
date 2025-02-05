@@ -24,7 +24,11 @@ export type Dummy = {
 
 // リテラル
 export type LiteralNode = {
-  type: typeof NODE_TYPE.NUM | typeof NODE_TYPE.STRING | typeof NODE_TYPE.ATOM;
+  type:
+    | typeof NODE_TYPE.NUM
+    | typeof NODE_TYPE.STRING
+    | typeof NODE_TYPE.ATOM
+    | typeof NODE_TYPE.BOOL;
 } & BaseNode;
 
 // 変数
@@ -95,7 +99,7 @@ export type BinaryNode = {
 export type Expr = Primary | BinaryNode | UnaryNode;
 
 // 計算
-export type CalcNode = SqrtNode | ExpNode;
+export type CalcNode = SqrtNode | ExpNode | LengthNode | NthNode | ListSumNode;
 
 // 仮定・生成
 // for
@@ -109,6 +113,25 @@ export type ForNode = {
 // select
 export type SelectNode = {
   type: typeof NODE_TYPE.SELECT;
+  list: Primary;
+} & BaseNode;
+
+// list:length
+export type LengthNode = {
+  type: typeof NODE_TYPE.LENGTH;
+  list: Primary;
+} & BaseNode;
+
+// list:nth
+export type NthNode = {
+  type: typeof NODE_TYPE.NTH;
+  index: Primary;
+  list: Primary;
+} & BaseNode;
+
+// list: sum
+export type ListSumNode = {
+  type: typeof NODE_TYPE.LIST_SUM;
   list: Primary;
 } & BaseNode;
 
@@ -126,7 +149,7 @@ export type ExpNode = {
 } & BaseNode;
 
 // 組み込みモジュール
-export type BuildInNode = ForNode | SelectNode | Expr;
+export type BuildInNode = ForNode | SelectNode | Expr | CaseNode;
 
 // 代入文
 export type AssignNode = {
@@ -156,6 +179,19 @@ export type CallNode = {
   module: string;
   input: StructNode;
   output: StructNode;
+} & BaseNode;
+
+// 条件によって処理を分岐
+// case
+export type CaseNode = {
+  type: typeof NODE_TYPE.CASE;
+  body: CasePattern[];
+} & BaseNode;
+
+export type CasePattern = {
+  type: typeof NODE_TYPE.CASE_PATTERN;
+  cond: Expr;
+  expr: Expr;
 } & BaseNode;
 
 // 文式

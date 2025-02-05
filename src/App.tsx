@@ -138,7 +138,7 @@ const App: React.FC = () => {
     for (const [key, value] of Object.entries(inputValue)) {
       if (value.type.includes("[]")) {
         if (value.type.includes("number")) {
-          userInput[`_${key}`] = [Number.parseFloat(value.value)];
+          userInput[`_${key}`] = value.value.map(Number.parseFloat);
         } else if (value.type.includes("boolean")) {
           userInput[`_${key}`] = [value.value === "true"];
         } else {
@@ -172,7 +172,6 @@ const App: React.FC = () => {
         userInput[`_${key}`] = value.value;
       }
     }
-
     try {
       const resultValue = mod.main(userInput);
       setResult(resultValue);
@@ -263,11 +262,15 @@ const App: React.FC = () => {
                           type="text"
                           value={value.value}
                           onChange={(e) => {
+                            // 3, 5, 8を入力した場合、[3, 5, 8]に変換
+                            const il = e.target.value
+                              .split(",")
+                              .map((i) => i.trim());
                             setInputValue((prev) => ({
                               ...prev,
                               [key]: {
                                 type: value.type,
-                                value: e.target.value,
+                                value: il,
                               },
                             }));
                           }}

@@ -2,6 +2,7 @@ import type {
   AssignNode,
   BlockNode,
   BuildInNode,
+  CasePattern,
   Expr,
   Member,
   ModuleNode,
@@ -649,6 +650,19 @@ class Parser {
     return this.parseAssign();
   }
 
+  parseCasePattern(): CasePattern {
+    const tok = this.peek();
+    const cond = this.parseExpr();
+    this.consume("->");
+    const expr = this.parseExpr();
+    return {
+      type: NODE_TYPE.CASE_PATTERN,
+      cond: cond,
+      expr: expr,
+      token: tok,
+    };
+  }
+
   /**
    * `assign = primary "=" build-in`
    * @returns {Expr} 代入式
@@ -763,6 +777,24 @@ class Parser {
         list: list,
         token: tok,
       };
+    }
+    // "case" "(" Expr "->" Expr *("," Expr "->" Expr) ")"
+    if (this.isCurrent("case")) {
+      this.next();
+      this.consume("(");
+      const body: CasePattern[] = [];
+      body.push(this.parseCasePattern());
+      while (this.isCurrent(",")) {
+        this.next();
+        body.push(this.parseCasePattern());
+      }
+      this.consume(")");
+      const c = {
+        type: NODE_TYPE.CASE,
+        body: body,
+        token: tok,
+      };
+      return c;
     }
     // calc
     return this.parseExpr();
@@ -1090,6 +1122,45 @@ class Parser {
         token: tok,
       };
     }
+    // list: "length" "(" list ")" リストの長さを返すメソッド
+    if (this.isCurrent("length")) {
+      this.next();
+      this.consume("(");
+      const list = this.parsePrimary();
+      this.consume(")");
+      return {
+        type: NODE_TYPE.LENGTH,
+        list: list as Primary,
+        token: tok,
+      };
+    }
+    // list: "nth" "(" index "," list ")" リストのn番目の要素を返すメソッド
+    if (this.isCurrent("nth")) {
+      this.next();
+      this.consume("(");
+      const index = this.parsePrimary();
+      this.consume(",");
+      const list = this.parsePrimary();
+      this.consume(")");
+      return {
+        type: NODE_TYPE.NTH,
+        index: index as Primary,
+        list: list as Primary,
+        token: tok,
+      };
+    }
+    // list: "sum" "(" list ")" リストの要素の合計を返すメソッド
+    if (this.isCurrent("sum")) {
+      this.next();
+      this.consume("(");
+      const list = this.parsePrimary();
+      this.consume(")");
+      return {
+        type: NODE_TYPE.LIST_SUM,
+        list: list as Primary,
+        token: tok,
+      };
+    }
     // "(" expr ")"
     if (this.isCurrent("(")) {
       this.next();
@@ -1148,6 +1219,15 @@ class Parser {
         member: member,
         token: tok,
         isDestructuring: false,
+      };
+    }
+    // "true" | "false"
+    if (this.isCurrent("true") || this.isCurrent("false")) {
+      const tok = this.peek();
+      this.next();
+      return {
+        type: NODE_TYPE.BOOL,
+        token: tok,
       };
     }
     switch (this.peek().type) {

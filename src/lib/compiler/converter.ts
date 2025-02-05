@@ -3,6 +3,7 @@ import { sortStmt } from "./sortStmt";
 import type * as ast from "./types/ast";
 import type * as newAst from "./types/newAst";
 import type { Visitor } from "./types/newAst";
+import type { Token } from "./types/token";
 import type { Type, NewType, StructType } from "./types/type";
 
 class ASTConverter {
@@ -63,6 +64,11 @@ class ASTConverter {
         token: node.token,
       }),
 
+      [NODE_TYPE.BOOL]: (node: ast.LiteralNode) => ({
+        type: NEW_NODE_TYPE.BOOLEAN,
+        token: node.token,
+      }),
+
       [NODE_TYPE.VAR]: (node: ast.VarNode) => {
         const isInParam = this.params.some((p) => p.name === node.name);
         return {
@@ -108,12 +114,18 @@ class ASTConverter {
         };
       },
 
+      [NODE_TYPE.LIST]: (node: ast.ListNode) => {
+        const member = node.member.map(
+          (m) => this.visitNode(m, visitor) as newAst.Expr
+        );
+        return { type: NEW_NODE_TYPE.LIST, token: node.token, member };
+      },
+
       [NODE_TYPE.CALL_EXPR]: (node: ast.Expr) => {
         if ("callee" in node) {
           const lhs = this.visitNode(node.lhs, visitor) as newAst.Expr;
           if ("rhs" in node) {
             const rhs = this.visitNode(node.rhs, visitor) as newAst.Expr;
-
             return {
               type: NODE_TYPE.CALL_EXPR,
               token: node.token,
@@ -130,6 +142,22 @@ class ASTConverter {
           };
         }
         return this.visitNode(node, visitor) as newAst.Primary;
+      },
+
+      [NODE_TYPE.LENGTH]: (node: ast.LengthNode) => {
+        const expr = this.visitNode(node.list, visitor) as newAst.Primary;
+        return { type: NODE_TYPE.LENGTH, token: node.token, list: expr };
+      },
+
+      [NODE_TYPE.NTH]: (node: ast.NthNode) => {
+        const list = this.visitNode(node.list, visitor) as newAst.Primary;
+        const index = this.visitNode(node.index, visitor) as newAst.Primary;
+        return { type: NODE_TYPE.NTH, token: node.token, list, index };
+      },
+
+      [NODE_TYPE.LIST_SUM]: (node: ast.ListSumNode) => {
+        const list = this.visitNode(node.list, visitor) as newAst.Primary;
+        return { type: NODE_TYPE.LIST_SUM, token: node.token, list };
       },
 
       [NODE_TYPE.SQRT]: (node: ast.SqrtNode) => {
@@ -160,7 +188,8 @@ class ASTConverter {
         // return
         if (
           rhs.type === NEW_NODE_TYPE.FOR ||
-          rhs.type === NEW_NODE_TYPE.SELECT
+          rhs.type === NEW_NODE_TYPE.SELECT ||
+          rhs.type === NEW_NODE_TYPE.CASE
         ) {
           const value =
             rhs.type === NEW_NODE_TYPE.FOR
@@ -172,11 +201,20 @@ class ASTConverter {
                   to: rhs.to,
                   inc: rhs.inc,
                 }
-              : {
+              : rhs.type === NEW_NODE_TYPE.SELECT
+              ? {
                   type: rhs.type,
                   token: lhs.token,
                   target: lhs,
                   list: rhs.list,
+                }
+              : {
+                  type: rhs.type,
+                  token: lhs.token,
+                  target: lhs,
+                  cond: rhs.cond,
+                  thn: rhs.thn,
+                  else: rhs.else,
                 };
 
           return { type: NEW_NODE_TYPE.RETURN, token: node.token, value };
@@ -202,6 +240,22 @@ class ASTConverter {
           token: node.token,
           cond,
         };
+      },
+
+      [NODE_TYPE.CASE]: (node: ast.CaseNode) => {
+        const body = node.body.map((pattern) => {
+          const cond = this.visitNode(pattern.cond, visitor) as newAst.Expr;
+          const thn = this.visitNode(pattern.expr, visitor) as newAst.Expr;
+          return { cond, thn };
+        });
+        const caseif: newAst.CaseIf = {
+          type: NEW_NODE_TYPE.CASE,
+          token: node.token,
+          cond: body[0].cond,
+          thn: body[0].thn,
+          else: body.slice(1),
+        };
+        return caseif;
       },
 
       [NODE_TYPE.CALL]: (node: ast.CallNode) => {

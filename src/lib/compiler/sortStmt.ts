@@ -51,6 +51,21 @@ const classifyStatements = (
           operands.push(
             ...collectVariables(innerStmt.rhs.expr, (v) => !v.isInput)
           );
+        if (innerStmt.rhs.type === NODE_TYPE.NTH)
+          operands.push(
+            ...collectVariables(innerStmt.rhs.index, (v) => !v.isInput)
+          );
+        if (innerStmt.rhs.type === NODE_TYPE.CASE) {
+          const os = innerStmt.rhs.body.flatMap((b) => {
+            const c = collectVariables(b.cond, (v) => !v.isInput);
+            const e = collectVariables(b.expr, (v) => !v.isInput);
+            // cとeの重複を削除
+            return c.concat(e).filter((v, i, self) => {
+              return self.findIndex((s) => s.name === v.name) === i;
+            });
+          });
+          operands.push(...os);
+        }
         categories.calc.push({
           type: "stmt-block",
           token: s.token,

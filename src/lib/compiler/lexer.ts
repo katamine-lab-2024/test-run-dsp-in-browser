@@ -217,6 +217,9 @@ const NUMBERS = /[0-9]/;
  */
 
 const KEYWORDS = [
+  // bool
+  "true",
+  "falt",
   // 制御構文
   "method",
   "module",
@@ -224,6 +227,7 @@ const KEYWORDS = [
   // モジュール
   "select",
   "for",
+  "case",
   "sqrt",
   "exp",
   "call",
@@ -234,8 +238,12 @@ const KEYWORDS = [
   "real",
   "atom",
   "bool",
+  // method
+  "length",
+  "nth",
+  "sum",
 ] as const;
-const OPT = ["==", "\\=", "=<", ">=", "or", "and", "not", "mod"] as const;
+const OPT = ["==", "\\=", "=<", ">=", "or", "and", "not", "mod", "->"] as const;
 const SINGLE_LETTER = [
   "+",
   "-",
