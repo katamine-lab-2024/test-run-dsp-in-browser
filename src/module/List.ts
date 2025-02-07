@@ -17,6 +17,10 @@ export class List<T extends string | number | boolean> {
     }
   }
 
+  public getValue(): Array<T> {
+    return this.list.map((v) => v.getValue());
+  }
+
   /**
    * リストの長さを取得する
    * @returns リストの長さ

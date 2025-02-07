@@ -235,6 +235,12 @@ const margeCalcTest = (sorted: StmtBlock[], otherList?: StmtBlock[]) => {
         const c = sorted[j];
         if (!c) break;
         if (c.phase === "calc") {
+          // もしcがcaseの場合は、そこで終了させる
+          const cinner = c.body.filter((b) => b.type !== "dummy")[0].stmt;
+          if (cinner.type === "assign" && cinner.rhs.type === "case") {
+            j++;
+            break;
+          }
           const body = c.body.concat(merged.body);
           sorted.splice(j + 1, 1);
           merged = { ...c, body };

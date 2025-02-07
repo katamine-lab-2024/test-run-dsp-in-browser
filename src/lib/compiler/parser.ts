@@ -1081,7 +1081,6 @@ class Parser {
       this.next();
       return this.parsePrimary();
     }
-    const tok = this.peek();
     return this.parsePrimary();
   }
 

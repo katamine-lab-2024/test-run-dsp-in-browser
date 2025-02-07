@@ -200,11 +200,31 @@ class CodeGenerator {
     let exec: string[] = [];
 
     if (blockList.length === 1) {
+      let whenStmt: undefined | string;
+      if (blockList[0].when) {
+        let condStr = this.exprGen(blockList[0].when, {
+          isVarRef: false,
+          isString: false,
+        });
+        if (condStr.includes("outerThis"))
+          condStr = condStr.replaceAll("outerThis", "this");
+        whenStmt = [
+          `    const method_${blockList[0].name} = (function() {
+          if (!(${condStr})) {
+             return Predicate.failure;
+          }
+          return new this.Method_${blockList[0].name}();
+        }).call(this)`,
+          `      return vm.jtry(method_${blockList[0].name}, this.cont);`,
+        ].join("\n");
+      }
       exec = [
         "  public exec(vm: VM): Predicate {",
-        ...blockList.map(
-          (block) => `    return new this.Method_${block.name}().exec(vm);`
-        ),
+        ...(whenStmt
+          ? [whenStmt]
+          : blockList.map(
+              (block) => `    return new this.Method_${block.name}().exec(vm);`
+            )),
         "  }",
         "",
       ];
@@ -420,14 +440,19 @@ class CodeGenerator {
           : "methodThis";
         let rhs = this.buildInGen(stmt.rhs, cont);
         // もしrhsの末尾に`getValue()`が無い時は、`getValue()`を付ける
-        if (!rhs.endsWith("getValue()")) rhs += ".getValue()";
+        if (
+          !/[=<>!]/.test(rhs) &&
+          !rhs.includes("Decimal") &&
+          !rhs.endsWith("getValue()")
+        )
+          rhs += ".getValue()";
         return [
           `                ${ths}.${
             (stmt.lhs as VarNode).name
           }.setValue(${rhs});`,
-          // `                console.log("${
-          //   (stmt.lhs as VarNode).name
-          // }: ", ${ths}.${(stmt.lhs as VarNode).name}.getValue());`,
+          `                console.log("${
+            (stmt.lhs as VarNode).name
+          }: ", ${ths}.${(stmt.lhs as VarNode).name}.getValue());`,
         ].join("\n");
       }
       case "return": {

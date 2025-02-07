@@ -142,7 +142,7 @@ const App: React.FC = () => {
         } else if (value.type.includes("boolean")) {
           userInput[`_${key}`] = [value.value === "true"];
         } else {
-          userInput[`_${key}`] = [value.value];
+          userInput[`_${key}`] = value.value.map((v: string) => v);
         }
       } else if (value.type.startsWith("{")) {
         // biome-ignore lint/suspicious/noExplicitAny: <explanation>
@@ -179,6 +179,9 @@ const App: React.FC = () => {
       console.error("プログラムの実行に失敗しました:", e);
     }
   };
+
+  // 出力結果の最後尾のキー名を取得
+  let lName = "";
 
   return (
     <>
@@ -218,29 +221,37 @@ const App: React.FC = () => {
           </div>
           {Array.isArray(result) ? (
             <ul>
-              {result.map((item, idx) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
-                <li key={idx}>
-                  {output.props.output.map((o) => {
-                    const name = o.name;
-                    const type = o.type;
-                    let value = item[o.name];
-                    if (type.includes("number")) {
-                      // 小数点以下6桁まで表示
-                      value = String(Number(value).toFixed(6));
-                    } else if (type.includes("object")) {
-                      value = `{${Object.entries(value)
-                        .map(([key, val]) => `${val}`)
-                        .join(", ")}}`;
-                    }
-                    return (
-                      <p key={name}>
-                        {name}: {type} = {value},{" "}
-                      </p>
-                    );
-                  })}
-                </li>
-              ))}
+              {result.map((item, idx) => {
+                // 最後尾の名前を取得
+                lName =
+                  output.props.output[output.props.output.length - 1].name;
+                return (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                  <li key={idx}>
+                    {output.props.output.map((o) => {
+                      const name = o.name;
+                      const type = o.type;
+                      let value = item[o.name];
+                      if (type.includes("number")) {
+                        // 小数点以下6桁まで表示
+                        value = String(Number(value).toFixed(6));
+                      } else if (type.includes("object")) {
+                        value = `{${Object.entries(value)
+                          .map(([key, val]) => `${val}`)
+                          .join(", ")}}`;
+                      }
+                      return (
+                        <>
+                          <p key={name}>
+                            {name}: {type} = {value},{" "}
+                          </p>
+                          {lName === name ? <hr /> : ""}
+                        </>
+                      );
+                    })}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <pre>{JSON.stringify(result, null, 2)}</pre>

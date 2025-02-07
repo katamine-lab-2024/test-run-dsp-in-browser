@@ -3,7 +3,6 @@ import { sortStmt } from "./sortStmt";
 import type * as ast from "./types/ast";
 import type * as newAst from "./types/newAst";
 import type { Visitor } from "./types/newAst";
-import type { Token } from "./types/token";
 import type { Type, NewType, StructType } from "./types/type";
 
 class ASTConverter {
