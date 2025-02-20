@@ -14,9 +14,6 @@ export class VM {
    * `VM`クラスのコンストラクタ
    * @param initSize チョイスポイントの初期サイズ | undefined
    */
-  public constructor(initSize?: number);
-  public constructor(initSize: number);
-
   public constructor(initSize?: number) {
     let localInitSize: number | undefined = initSize;
     if (localInitSize === undefined) {

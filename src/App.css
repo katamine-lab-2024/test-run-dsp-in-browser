@@ -4,6 +4,11 @@
   padding: 2rem;
   text-align: center;
 }
+
+input {
+  width: 50%;
+}
+
 .container {
   display: flex;
   gap: 1.25rem; /* gap-5 */
@@ -108,7 +113,7 @@
   margin: 15% auto;
   padding: 20px;
   border: 1px solid #888;
-  width: 50%;
+  width: 60%;
   border-radius: 12px;
 }
 
@@ -116,4 +121,9 @@
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
+}
+
+.modal-input-wrapper {
+  display: flex;
+  align-items: center;
 }

@@ -87,10 +87,8 @@ const App: React.FC = () => {
         const blob = new Blob([code], { type: "text/javascript" });
         const blobUrl = URL.createObjectURL(blob);
         // dynamic import で読み込む
-        // ここで main.ts 内の console.log も呼び出され、結果がコンソールに表示される
         const m = await import(/* @vite-ignore */ blobUrl);
         setMod(m);
-        // ここで、output.props.input に対応する値の入力を求める
         for (const input of output.props.input) {
           const type = input.type;
           setInputValue((prev) => ({
@@ -233,8 +231,10 @@ const App: React.FC = () => {
                       const type = o.type;
                       let value = item[o.name];
                       if (type.includes("number")) {
-                        // 小数点以下6桁まで表示
-                        value = String(Number(value).toFixed(6));
+                        // 小数点以下6桁以上ある時、小数点以下6桁を四捨五入
+                        if (value.toString().split(".")[1]?.length >= 6) {
+                          value = Math.round(value * 1000000) / 1000000;
+                        }
                       } else if (type.includes("object")) {
                         value = `{${Object.entries(value)
                           .map(([key, val]) => `${val}`)
@@ -258,6 +258,7 @@ const App: React.FC = () => {
           )}
         </div>
       </div>
+
       {openModal && (
         <div className="modal">
           <div className="modal-content">
