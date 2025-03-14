@@ -72,8 +72,6 @@ npm run dev
 
 このコードは、以下の GitHub に載せています。
 
-```
-https://github.com/katamine-lab-2024/dsp-to-ts-generator
-```
+https://github.com/katamine-lab-2024/test-run-dsp-in-browser
 
 もしかしたら個人的にリファクタ等しているかもしれないです。
