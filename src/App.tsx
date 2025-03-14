@@ -5,14 +5,19 @@ import { browserBundle, revokeAllFileMapping } from "./lib/browser-bundle";
 import { compiler } from "./lib/compiler/main";
 import { getFileString } from "./util/getFileString";
 
-const defaultMain = `pointInQuarterCircle({R : real}, {X : real, Y : real})
+// B: 開始値, E: 終了値, S: ステップ
+// モジュール例: Nの値をBからEまでSずつ増加させる
+const defaultMain = `for({B: real, E: real, S: real}, {N: real})
   method
-    X : real = for(0.0, R, 1.0);
-    Y : real = for(0.0, R, 1.0);
-    D : real = sqrt(X^2 + Y^2);
-    test(D =< R);
+    when(B =< E);
+    N: real = B;
   end method;
-end module;
+  method
+    when(B+S =< E);
+    B1: real = B+S;
+    call(for, {B1, E, S}, {N});
+  end method;
+end;
 `;
 
 const App: React.FC = () => {
@@ -245,7 +250,7 @@ const App: React.FC = () => {
                           <p key={name}>
                             {name}: {type} = {value},{" "}
                           </p>
-                          {lName === name ? <hr /> : ""}
+                          {lName === name ? <hr key={`hr-${name}`} /> : null}
                         </>
                       );
                     })}

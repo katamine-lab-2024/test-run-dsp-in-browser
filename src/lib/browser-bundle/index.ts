@@ -1,3 +1,4 @@
+// https://github.com/steelydylan/browser-bundler/tree/master
 import {
   initialize as esInitialize,
   type Loader,
