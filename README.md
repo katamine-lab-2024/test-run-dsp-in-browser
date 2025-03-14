@@ -54,19 +54,19 @@ npm run dev
 ├── src/
 │   ├── lib/
 │   │   ├── browser-bundle/ … ブラウザでTypeScriptをバンドルするためのモジュール
-│   │   └── compiler/ … ts生成モジュール(dsp-to-ts-generator)
-│   ├── module/ … 生成プログラムに必要な組込モジュール群
+│   │   └── compiler/       … ts生成モジュール(dsp-to-ts-generator)
+│   ├── module/             … 生成プログラムに必要な組込モジュール群
 │   │   ├── …
-│   │   ├── Predicate.ts … 述語の抽象クラス、継続ゴール
-│   │   ├── Variable.ts … 変数
-│   │   └── VM.ts … 推論エンジン
-│   ├── util/ … その他モジュール
-│   └── App.tsx … アプリケーション
-├── package.json      … インストールしたライブラリ等の情報
-└── README.md         … 本ファイル
+│   │   ├── Predicate.ts    … 述語の抽象クラス、継続ゴール
+│   │   ├── Variable.ts     … 変数
+│   │   └── VM.ts           … 推論エンジン
+│   ├── util/               … その他モジュール
+│   └── App.tsx             … アプリケーション
+├── package.json            … インストールしたライブラリ等の情報
+└── README.md               … 本ファイル
 ```
 
-`src/lib/browser-bundle`については、[browser-bundler](https://github.com/steelydylan/browser-bundler/tree/master)から本プロジェクトで利用できるように編集した。
+`src/lib/browser-bundle`については、[browser-bundler](https://github.com/steelydylan/browser-bundler/tree/master)から本プロジェクトで利用できるように編集しました。
 
 ## 📍 その他
 
